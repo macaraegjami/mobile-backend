@@ -16,12 +16,11 @@ router.get('/', async (req, res) => {
 router.get('/status/:studentID', async (req, res) => {
   try {
     const { studentID } = req.params;
-    const today = new Date().toLocaleDateString();
-
+    
+    // Find the most recent check-in without checkout
     const currentCheckIn = await Attendance.findOne({
       studentID,
-      scanDate: today,
-      status: 'checked-in'
+      checkOutTime: { $exists: false }
     }).sort({ checkInTime: -1 });
 
     res.json({
@@ -34,53 +33,95 @@ router.get('/status/:studentID', async (req, res) => {
   }
 });
 
-// ✅ Scan (check-in / check-out)
+// ✅ Scan (ALWAYS create new check-in)
 router.post('/scan', async (req, res) => {
   try {
     const { studentID, firstName, lastName, course, yearLevel, purpose, email } = req.body;
-    const today = new Date().toLocaleDateString();
     const now = new Date();
+    const today = now.toLocaleDateString();
 
-    const currentCheckIn = await Attendance.findOne({
-      studentID,
+    // ALWAYS create a new check-in record
+    const newAttendance = new Attendance({
+      studentID, 
+      firstName, 
+      lastName, 
+      course, 
+      yearLevel, 
+      email, 
+      purpose,
+      checkInTime: now,
       scanDate: today,
       status: 'checked-in'
-    }).sort({ checkInTime: -1 });
+    });
 
-    if (currentCheckIn) {
-      currentCheckIn.checkOutTime = now;
-      currentCheckIn.status = 'checked-out';
-      currentCheckIn.duration = Math.round((now - currentCheckIn.checkInTime) / (1000 * 60));
-      await currentCheckIn.save();
-
-      res.json({ success: true, action: 'checkout', message: 'Successfully checked out', attendance: currentCheckIn });
-    } else {
-      const newAttendance = new Attendance({
-        studentID, firstName, lastName, course, yearLevel, email, purpose,
-        checkInTime: now,
-        scanDate: today,
-        status: 'checked-in'
-      });
-
-      await newAttendance.save();
-      res.json({ success: true, action: 'checkin', message: 'Successfully checked in', attendance: newAttendance });
-    }
+    await newAttendance.save();
+    
+    res.json({ 
+      success: true, 
+      action: 'checkin', 
+      message: 'Successfully checked in', 
+      attendance: newAttendance 
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error processing attendance' });
   }
 });
 
-// ✅ Checkout
-router.post('/checkout', async (req, res) => {
+// ✅ Manual Checkout endpoint
+router.post('/checkout/:recordId', async (req, res) => {
   try {
-    const { userId } = req.body;
-    const attendance = await Attendance.findOne({ user: userId, checkOut: null }).sort({ checkIn: -1 });
-
-    if (!attendance) return res.status(404).json({ success: false, error: 'No active check-in found.' });
-
-    attendance.checkOut = new Date();
+    const { recordId } = req.params;
+    const now = new Date();
+    
+    const attendance = await Attendance.findById(recordId);
+    
+    if (!attendance) {
+      return res.status(404).json({ success: false, error: 'Attendance record not found.' });
+    }
+    
+    if (attendance.checkOutTime) {
+      return res.status(400).json({ success: false, error: 'Already checked out.' });
+    }
+    
+    attendance.checkOutTime = now;
+    attendance.status = 'checked-out';
+    attendance.duration = Math.round((now - attendance.checkInTime) / (1000 * 60));
+    
     await attendance.save();
+    
     res.json({ success: true, attendance });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ✅ Auto-checkout all records at end of day (run as cron job)
+router.post('/auto-checkout', async (req, res) => {
+  try {
+    const now = new Date();
+    const today = now.toLocaleDateString();
+    
+    // Find all records from today that haven't been checked out
+    const recordsToUpdate = await Attendance.find({
+      scanDate: today,
+      checkOutTime: { $exists: false }
+    });
+    
+    let updatedCount = 0;
+    
+    for (const record of recordsToUpdate) {
+      record.checkOutTime = now;
+      record.status = 'auto-checkout';
+      record.duration = Math.round((now - record.checkInTime) / (1000 * 60));
+      await record.save();
+      updatedCount++;
+    }
+    
+    res.json({
+      success: true,
+      message: `Auto-checked out ${updatedCount} records`,
+      updatedCount
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -104,31 +145,31 @@ router.get('/today', async (req, res) => {
   }
 });
 
-// ✅ Get all records for a student
+// ✅ Get all records for a student (FIXED - show all records, not grouped by date)
 router.get('/student/:studentID', async (req, res) => {
   try {
     const { studentID } = req.params;
     const records = await Attendance.find({ studentID }).sort({ checkInTime: -1 });
 
-    const grouped = {};
-    records.forEach(rec => {
-      const dateKey = rec.scanDate;
-      if (!grouped[dateKey]) {
-        grouped[dateKey] = {
-          date: dateKey,
-          checkIn: rec.checkInTime ? new Date(rec.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : null,
-          checkOut: rec.checkOutTime ? new Date(rec.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : null,
-          purpose: rec.purpose || '',
-          rawDate: rec.checkInTime ? new Date(rec.checkInTime).toISOString() : null,
-          status: rec.status,
-          duration: rec.duration,
-        };
-      } else if (rec.checkOutTime && (!grouped[dateKey].checkOut || rec.checkOutTime > grouped[dateKey].checkOut)) {
-        grouped[dateKey].checkOut = new Date(rec.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-      }
-    });
-
-    const result = Object.values(grouped).sort((a, b) => new Date(b.rawDate) - new Date(a.rawDate));
+    // Transform each record individually (no grouping)
+    const result = records.map(rec => ({
+      id: rec._id,
+      date: rec.scanDate,
+      checkIn: rec.checkInTime ? new Date(rec.checkInTime).toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        hour12: true 
+      }) : null,
+      checkOut: rec.checkOutTime ? new Date(rec.checkOutTime).toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        hour12: true 
+      }) : null,
+      purpose: rec.purpose || '',
+      rawDate: rec.checkInTime ? rec.checkInTime.toISOString() : null,
+      status: rec.status,
+      duration: rec.duration,
+    }));
 
     res.json({ success: true, records: result });
   } catch (error) {
