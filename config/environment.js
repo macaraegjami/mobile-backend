@@ -33,9 +33,9 @@ const getEnvironmentConfig = () => {
       ]
     },
     production: {
-      apiUrl: 'https://mobile-backend-aftl.onrender.com',
+      apiUrl: 'https://mob-backend-9qi8.onrender.com',
       corsOrigins: [
-        'https://mobile-backend-aftl.onrender.com',
+        'https://mob-backend-9qi8.onrender.com',
         '*'
       ]
     }

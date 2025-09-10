@@ -89,30 +89,38 @@ router.post('/:userId/upload-profile', authenticateToken, async (req, res) => {
   }
 });
 
-// In your users.js file, add this route:
-// In your users.js file, fix the change-password route
+// Fixed change-password route in users.js
 router.post('/change-password', authenticateToken, async (req, res) => {
   try {
-    console.log('Change password request received:', req.body);
+    console.log('Change password request received for user:', req.user._id);
 
     const userId = req.user._id;
     const { currentPassword, newPassword } = req.body;
 
+    // Validate input
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
         success: false,
-        error: 'All fields are required.'
+        error: 'Current password and new password are required.'
       });
     }
 
     if (newPassword.length < 8) {
       return res.status(400).json({
         success: false,
-        error: 'New password must be at least 8 characters.'
+        error: 'New password must be at least 8 characters long.'
       });
     }
 
-    // Find user with password field selected
+    // Check if new password is different from current
+    if (currentPassword === newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'New password must be different from current password.'
+      });
+    }
+
+    // Find user and explicitly select password field
     const user = await User.findById(userId).select('+password');
     if (!user) {
       return res.status(404).json({
@@ -121,45 +129,69 @@ router.post('/change-password', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check if user has a password
+    // Check if user has a password (in case of social login users)
     if (!user.password) {
       return res.status(400).json({
         success: false,
-        error: 'Password change not allowed for this account type.'
+        error: 'Password change not available for this account type.'
       });
     }
 
     // Verify current password
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    console.log('Password match result:', isMatch);
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    console.log('Current password verification:', isCurrentPasswordValid ? 'SUCCESS' : 'FAILED');
 
-    if (!isMatch) {
+    if (!isCurrentPasswordValid) {
       return res.status(401).json({
         success: false,
         error: 'Current password is incorrect.'
       });
     }
 
-    // Hash new password using the same method as registration
-    const saltRounds = 12;
-    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+    // Hash new password with same salt rounds as registration
+    const saltRounds = 10; // Use consistent salt rounds
+    const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+    
+    console.log('New password hashed successfully');
 
-    // Update password directly
-    user.password = hashedPassword;
-    await user.save();
+    // Update password directly without triggering pre-save hooks
+    await User.findByIdAndUpdate(
+      userId,
+      { 
+        password: hashedNewPassword,
+        // Clear any reset tokens if they exist
+        resetToken: undefined,
+        resetTokenExpires: undefined,
+        resetTokenUsed: undefined
+      },
+      { new: false } // Don't return the updated document to avoid password in response
+    );
 
-    console.log('Password updated successfully for user:', user.email);
+    console.log('Password updated successfully in database for user:', user.email);
+
+    // Verify the password was saved correctly by testing it
+    const updatedUser = await User.findById(userId).select('+password');
+    const testNewPassword = await updatedUser.comparePassword(newPassword);
+    console.log('New password verification test:', testNewPassword ? 'SUCCESS' : 'FAILED');
+
+    if (!testNewPassword) {
+      console.error('Password update failed - verification test failed');
+      return res.status(500).json({
+        success: false,
+        error: 'Password update failed. Please try again.'
+      });
+    }
 
     res.json({
       success: true,
-      message: 'Password updated successfully.'
+      message: 'Password updated successfully. Please log in with your new password.'
     });
 
-  } catch (err) {
-    console.error('Password change error:', err);
+  } catch (error) {
+    console.error('Change password error:', error);
     res.status(500).json({
       success: false,
-      error: 'Server error.'
+      error: 'Server error while updating password. Please try again.'
     });
   }
 });

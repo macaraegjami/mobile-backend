@@ -1249,7 +1249,92 @@ router.post('/reset-password', async (req, res) => {
     });
   }
 });
+// Fixed reset-password POST route in auth.js
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, email, newPassword, confirmPassword } = req.body;
 
+    console.log('Password reset attempt for email:', email);
+
+    // Validate input
+    if (!token || !email || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'All fields are required'
+      });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Passwords do not match'
+      });
+    }
+
+    // Enhanced password validation
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password must be at least 8 characters long'
+      });
+    }
+
+    // Find user with valid reset token
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+      resetToken: token,
+      resetTokenExpires: { $gt: Date.now() },
+      resetTokenUsed: { $ne: true }
+    }).select('+password'); // Make sure to select password field
+
+    if (!user) {
+      console.log('Invalid or expired reset token for email:', email);
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired reset token'
+      });
+    }
+
+    console.log('Valid reset token found, updating password for user:', user.email);
+
+    // Set the new password and let the pre-save hook handle hashing
+    user.password = newPassword; // Raw password - pre-save hook will hash it
+    user.resetToken = undefined;
+    user.resetTokenExpires = undefined;
+    user.resetTokenUsed = true;
+    
+    // Save the user - this will trigger the pre-save hook to hash the password
+    await user.save();
+
+    console.log('Password reset successful for user:', user.email);
+
+    // Verify the password was updated correctly
+    const updatedUser = await User.findById(user._id).select('+password');
+    const passwordTest = await bcrypt.compare(newPassword, updatedUser.password);
+    
+    if (!passwordTest) {
+      console.error('Password reset verification failed for user:', user.email);
+      return res.status(500).json({
+        success: false,
+        error: 'Password reset failed. Please try again.'
+      });
+    }
+
+    console.log('Password reset verification successful for user:', user.email);
+
+    res.json({
+      success: true,
+      message: 'Password has been reset successfully'
+    });
+
+  } catch (error) {
+    console.error('Password reset error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reset password. Please try again.'
+    });
+  }
+});
 
 router.post('/verify-reset-token', async (req, res) => {
   try {
