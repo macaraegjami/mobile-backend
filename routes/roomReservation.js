@@ -1,12 +1,28 @@
 import { Router } from 'express';
 const router = Router();
 import RoomReservation from '../models/RoomReservation.js';
+import Activity from '../models/Activity.js';
+import User from '../models/User.js'; // Needed if you want full user details
 
 // POST - Create new reservation
 router.post('/', async (req, res) => {
   try {
     const reservation = new RoomReservation(req.body);
     await reservation.save();
+
+    // Add Activity log for reservation creation
+    await new Activity({
+      userId: reservation.userId,
+      firstName: req.user?.firstName,
+      lastName: req.user?.lastName,
+      email: req.user?.email,
+      role: req.user?.role,
+      action: 'roomreserve_add',
+      details: `Reserved room: ${reservation.room} on ${reservation.date.toLocaleDateString()} at ${reservation.time} for "${reservation.purpose}"`,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    }).save();
+
     res.status(201).json(reservation);
   } catch (error) {
     res.status(400).json({ 
@@ -47,6 +63,24 @@ router.put('/:id', async (req, res) => {
       req.body,
       { new: true }
     );
+
+    if (!updatedReservation) {
+      return res.status(404).json({ message: 'Reservation not found' });
+    }
+
+    // Add Activity log for reservation update
+    await new Activity({
+      userId: updatedReservation.userId,
+      firstName: req.user?.firstName,
+      lastName: req.user?.lastName,
+      email: req.user?.email,
+      role: req.user?.role,
+      action: 'roomreserve_update',
+      details: `Updated reservation for room: ${updatedReservation.room} on ${updatedReservation.date.toLocaleDateString()} at ${updatedReservation.time}`,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    }).save();
+
     res.json(updatedReservation);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -63,7 +97,6 @@ router.patch('/:id/status', async (req, res) => {
       return res.status(404).json({ message: 'Reservation not found' });
     }
 
-    // Validate status transition
     if (reservation.status.toLowerCase() === 'cancelled') {
       return res.status(400).json({ message: 'Reservation is already cancelled' });
     }
@@ -73,8 +106,21 @@ router.patch('/:id/status', async (req, res) => {
     }
 
     // Update status
-    reservation.status = status.toLowerCase(); // Ensure lowercase for consistency
+    reservation.status = status.toLowerCase();
     await reservation.save();
+
+    // Add Activity log for status change
+    await new Activity({
+      userId: reservation.userId,
+      firstName: req.user?.firstName,
+      lastName: req.user?.lastName,
+      email: req.user?.email,
+      role: req.user?.role,
+      action: 'status_change',
+      details: `Room reservation status changed to "${status}" for room: ${reservation.room} on ${reservation.date.toLocaleDateString()} at ${reservation.time}`,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    }).save();
     
     res.json({
       message: 'Reservation status updated successfully',
@@ -89,16 +135,38 @@ router.patch('/:id/status', async (req, res) => {
   }
 });
 
-// DELETE - Remove reservation
+// DELETE - Cancel reservation instead of hard delete
 router.delete('/:id', async (req, res) => {
   try {
-    await RoomReservation.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Reservation deleted successfully' });
+    const reservation = await RoomReservation.findById(req.params.id);
+    if (!reservation) {
+      return res.status(404).json({ message: 'Reservation not found' });
+    }
+
+    // Update status to cancelled instead of deleting
+    reservation.status = 'cancelled';
+    await reservation.save();
+
+    // Add Activity log for cancellation
+    await new Activity({
+      userId: reservation.userId,
+      firstName: req.user?.firstName,
+      lastName: req.user?.lastName,
+      email: req.user?.email,
+      role: req.user?.role,
+      action: 'status_change',
+      details: `Cancelled room reservation for room: ${reservation.room} on ${reservation.date.toLocaleDateString()} at ${reservation.time}`,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    }).save();
+
+    res.json({ message: 'Reservation cancelled successfully', reservation });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
+// GET - Reservations by user
 router.get('/user/:userId', async (req, res) => {
   try {
     const reservations = await RoomReservation.find({ userId: req.params.userId })
