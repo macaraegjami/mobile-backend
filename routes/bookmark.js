@@ -1,7 +1,8 @@
+import { Router } from 'express';
+import User from "../models/User.js";
+import Activity from '../models/Activity.js';
 
-import User from "../models/User";
-
-const router = express.Router();
+const router = Router();
 
 router.post('/:materialId', auth, async (req, res) => {
   try {

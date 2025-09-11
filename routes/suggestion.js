@@ -8,7 +8,7 @@ const router = Router();
 
 router.post('/', async (req, res) => {
     try {
-        const suggestion = new Feedback(req.body);
+        const suggestion = new Suggestion(req.body);
         await suggestion.save();
 
         // Only log activity if user is provided
