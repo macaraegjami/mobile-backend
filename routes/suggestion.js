@@ -1,51 +1,23 @@
-import express from "express";
-import Suggestion from "../models/Suggestion.js";
-
-const router = express.Router();
-
-// POST suggestion
-router.post("/", async (req, res) => {
+router.post('/', async (req, res) => {
+  const user = await User.findById(req.user._id);
   try {
-    const { bookTitle, author, edition, reason } = req.body;
-
-    if (!bookTitle) {
-      return res.status(400).json({
-        success: false,
-        message: "Submission failed",
-        error: "Book title is required",
-      });
-    }
-    if (!author) {
-      return res.status(400).json({
-        success: false,
-        message: "Submission failed",
-        error: "Author is required",
-      });
-    }
-    if (!reason) {
-      return res.status(400).json({
-        success: false,
-        message: "Submission failed",
-        error: "Reason for suggestion is required",
-      });
-    }
-
-    const suggestion = new Suggestion({ bookTitle, author, edition, reason });
+    const suggestion = new Suggestion(req.body);
     await suggestion.save();
 
-    res.status(201).json({
-      success: true,
-      message: "Suggestion submitted successfully",
-      data: suggestion,
-    });
-  } catch (error) {
-    console.error("Suggestion submission error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Submission failed",
-      error: error.message || "Internal server error",
-    });
+await new Activity({
+        userId: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        action: 'suggestion_add',
+        details: 'User made a suggestion',
+        ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+      }).save();
+
+    res.status(201).json(suggestion);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
-
-export default router;

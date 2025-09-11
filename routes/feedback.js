@@ -1,44 +1,23 @@
-import express from "express";
-import Feedback from "../models/Feedback.js";
-
-const router = express.Router();
-
-// POST feedback
-router.post("/", async (req, res) => {
+router.post('/', async (req, res) => {
+  const user = await User.findById(req.user._id);
   try {
-    const { name, rating, comment, feedbackType } = req.body;
-
-    if (!rating || rating < 1 || rating > 5) {
-      return res.status(400).json({
-        success: false,
-        message: "Submission failed",
-        error: "Rating must be between 1 and 5",
-      });
-    }
-    if (!comment) {
-      return res.status(400).json({
-        success: false,
-        message: "Submission failed",
-        error: "Comment is required",
-      });
-    }
-
-    const feedback = new Feedback({ name, rating, comment, feedbackType });
+    const feedback = new Feedback(req.body);
     await feedback.save();
 
-    res.status(201).json({
-      success: true,
-      message: "Feedback submitted successfully",
-      data: feedback,
-    });
-  } catch (error) {
-    console.error("Feedback submission error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Submission failed",
-      error: error.message || "Internal server error",
-    });
+    await new Activity({
+      userId: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      role: user.role,
+      action: 'feedback_add',
+      details: 'User made a feedback',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    }).save();
+
+    res.status(201).json(feedback);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
-
-export default router;
