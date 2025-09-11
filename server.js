@@ -101,7 +101,6 @@ app.use('/', authRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/learnmat', learnMatRoutes);
 app.use('/api/archive-requests', archiveRequestRoutes);
-app.use('/api/feedbacks', feedbackRoutes);
 app.use('/api/room-reservations', roomReservationRoutes);
 app.use('/api/reserve-requests', reserveRoutes);
 app.use('/api/borrow-requests', borrowRoutes);
