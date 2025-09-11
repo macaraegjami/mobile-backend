@@ -1,4 +1,3 @@
-// routes/suggestion.js (without auth)
 import express from 'express';
 import Suggestion from '../models/Suggestion.js';
 

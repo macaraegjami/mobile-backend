@@ -1,6 +1,3 @@
-// Alternative routes without auth requirement
-
-// routes/feedback.js (without auth)
 import express from 'express';
 import Feedback from '../models/Feedback.js';
 
@@ -25,11 +22,19 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Validate feedbackType
+    if (!feedbackType || !['library', 'museum'].includes(feedbackType)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Feedback type must be either library or museum' 
+      });
+    }
+
     const feedbackData = {
       name: name || 'Anonymous',
       rating: Number(rating),
       comment: comment.trim(),
-      feedbackType: feedbackType || 'library'
+      feedbackType: feedbackType
     };
 
     const feedback = new Feedback(feedbackData);
@@ -51,4 +56,3 @@ router.post('/', async (req, res) => {
 });
 
 export default router;
-
