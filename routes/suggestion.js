@@ -8,14 +8,12 @@ const router = Router();
 
 router.post('/', async (req, res) => {
     try {
-        const suggestion = new Suggestion(req.body);
+        const suggestion = new Feedback(req.body);
         await suggestion.save();
 
-        // Use userId from request body if not authenticated
-        const userId = req.user?._id || req.body.userId;
-
-        if (userId) {
-            const user = await User.findById(userId);
+        // Only log activity if user is provided
+        if (req.body.userId) {
+            const user = await User.findById(req.body.userId);
             if (user) {
                 await new Activity({
                     userId: user._id,
@@ -31,9 +29,9 @@ router.post('/', async (req, res) => {
             }
         }
 
-        res.status(201).json({ success: true, message: 'Suggestion submitted successfully' });
+        res.status(201).json({ success: true, suggestion });
     } catch (err) {
-        res.status(400).json({ error: err.message, success: false });
+        res.status(400).json({ success: false, error: err.message });
     }
 });
 
