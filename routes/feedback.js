@@ -1,3 +1,9 @@
+import { Router } from "express";
+import Feedback from "../models/Feedback.js";
+import User from "../models/User.js";
+
+const router = Router
+
 router.post('/', async (req, res) => {
   const user = await User.findById(req.user._id);
   try {
@@ -21,3 +27,5 @@ router.post('/', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+
+export default router;
