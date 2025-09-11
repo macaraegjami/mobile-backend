@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import User from "../models/User.js";
 import Activity from '../models/Activity.js';
-import LearningMaterial from '../models/LearningMaterial.js'; // Make sure to import this
+import LearningMaterial from '../models/LearningMaterials.js'; // Make sure to import this
 import authenticateToken from '../middleware/auth.js'; // Make sure to import auth middleware
 
 const router = Router();
