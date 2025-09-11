@@ -33,9 +33,9 @@ const getEnvironmentConfig = () => {
       ]
     },
     production: {
-      apiUrl: 'https://mob-backend-9qi8.onrender.com',
+      apiUrl: 'https://mobile-backend-kmdx.onrender.com',
       corsOrigins: [
-        'https://mob-backend-9qi8.onrender.com',
+        'https://mobile-backend-kmdx.onrender.com',
         '*'
       ]
     }
