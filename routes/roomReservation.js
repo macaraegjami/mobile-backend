@@ -1,33 +1,41 @@
 import { Router } from 'express';
 const router = Router();
-import RoomReservation from '../models/RoomReservation.js';
+import Feedback from '../models/Feedback.js';
 import Activity from '../models/Activity.js';
-import User from '../models/User.js'; // Needed if you want full user details
+import authenticateToken from '../middleware/authenticateToken.js';
 
 // POST - Create new reservation
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
-    const reservation = new RoomReservation(req.body);
-    await reservation.save();
+    const feedback = new Feedback({
+      ...req.body,
+      userId: req.user._id,   // now req.user is guaranteed
+      date: new Date()
+    });
 
-    // Add Activity log for reservation creation
+    await feedback.save();
+
+    // Log Activity
     await new Activity({
-      userId: reservation.userId,
-      firstName: req.user?.firstName,
-      lastName: req.user?.lastName,
-      email: req.user?.email,
-      role: req.user?.role,
-      action: 'roomreserve_add',
-      details: `Reserved room: ${reservation.room} on ${reservation.date.toLocaleDateString()} at ${reservation.time} for "${reservation.purpose}"`,
+      userId: req.user._id,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      email: req.user.email,
+      role: req.user.role,  // ✅ will not be undefined anymore
+      action: 'feedback_add',
+      details: `User submitted feedback: "${feedback.message || 'N/A'}"`,
       ipAddress: req.ip,
       userAgent: req.headers['user-agent']
     }).save();
 
-    res.status(201).json(reservation);
+    res.status(201).json({
+      message: 'Feedback submitted successfully',
+      feedback
+    });
   } catch (error) {
-    res.status(400).json({ 
-      message: 'Failed to create reservation',
-      error: error.message 
+    res.status(400).json({
+      message: 'Failed to submit feedback',
+      error: error.message
     });
   }
 });
