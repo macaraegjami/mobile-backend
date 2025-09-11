@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import Suggestion from "../models/Suggestion.js";
 import User from "../models/User.js";
+import Activity from "../models/Activity.js";
 
 
 const router = Router();
