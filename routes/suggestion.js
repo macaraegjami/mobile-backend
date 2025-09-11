@@ -7,30 +7,31 @@ import Activity from "../models/Activity.js";
 const router = Router();
 
 router.post('/', async (req, res) => {
-  try {
-    const suggestion = new Suggestion(req.body);
-    await suggestion.save();
+    try {
+        const suggestion = new Suggestion(req.body);
+        await suggestion.save();
 
-    // Only log activity if user is authenticated
-    if (req.user && req.user._id) {
-      const user = await User.findById(req.user._id);
-      await new Activity({
-        userId: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-        action: 'suggestion_add',
-        details: 'User made a suggestion',
-        ipAddress: req.ip,
-        userAgent: req.headers['user-agent']
-      }).save();
+        // Only log activity if user is authenticated
+        if (req.user && req.user._id) {
+            const user = await User.findById(req.user._id);
+            await new Activity({
+                userId: user._id,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+                role: user.role,
+                action: 'suggestion_add',
+                details: 'User made a suggestion',
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent']
+            }).save();
+
+        }
+
+        res.status(201).json({ success: true, message: 'Suggestion submitted successfully' });
+    } catch (err) {
+        res.status(400).json({ error: err.message, success: false });
     }
-
-    res.status(201).json({ success: true, message: 'Suggestion submitted successfully' });
-  } catch (err) {
-    res.status(400).json({ error: err.message, success: false });
-  }
 });
 
 export default router;
