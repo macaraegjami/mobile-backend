@@ -6,29 +6,84 @@ const userSchema = new Schema({
   firstName: { type: String, required: true },
   middleName: { type: String },
   lastName: { type: String, required: true },
-  studentID: { type: String, required: true, unique: true },
+
+  // Conditionally required studentID
+  studentID: { 
+    type: String, 
+    required: function () {
+      return !['admin', 'superadmin', 'super_admin'].includes(this.role);
+    }, 
+    sparse: true,
+    unique: false // allow duplicates for admins
+  },
+
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-  phone: { type: String, required: true },
-  dob: { type: Date, required: true },
+  phone: { type: String },
+  dob: { type: Date },
   password: { type: String, required: true },
-  course: { type: String, required: true },
-  yearLevel: { type: String, required: true },
-  department: { type: String, required: true },
+
+  // Conditionally required academic info
+  course: { 
+    type: String,
+    required: function () {
+      return !['admin', 'superadmin', 'super_admin'].includes(this.role);
+    }
+  },
+  department: { 
+    type: String,
+    required: function () {
+      return !['admin', 'superadmin', 'super_admin'].includes(this.role);
+    }
+  },
+  yearLevel: { 
+    type: String,
+    required: function () {
+      return !['admin', 'superadmin', 'super_admin'].includes(this.role);
+    }
+  },
+
+  // Library card number
+  libraryCardNumber: { type: String, unique: true, sparse: true },
+
   profileImage: { type: String },
   lastLogin: { type: Date },
   loginCount: { type: Number, default: 0 },
   loginAttempts: { type: Number, default: 0 },
+
+  // Verification
   isVerified: { type: Boolean, default: false },
   verificationToken: { type: String },
   verificationTokenExpires: { type: Date },
+
+  // OTPs
   otp: { type: String },
   otpExpires: { type: Date },
-  role: { type: String, default: 'patron' },
+  loginOtp: { type: String },
+  loginOtpExpires: { type: Date },
+
+  role: { type: String, enum: ['patron', 'admin', 'superadmin', 'super_admin'], default: 'patron' },
 
   // Password reset fields
   resetToken: { type: String },
   resetTokenExpires: { type: Date },
-  resetTokenUsed: { type: Boolean, default: false }
+  resetTokenUsed: { type: Boolean, default: false },
+
+  // Bookmarks and history
+  bookmarks: [{
+    type: Schema.Types.ObjectId,
+    ref: 'LearningMaterial',
+    default: []
+  }],
+  history: [{
+    material: {
+      type: Schema.Types.ObjectId,
+      ref: 'LearningMaterial'
+    },
+    viewedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }]
 }, {
   timestamps: true,
   collection: 'lms_user',
@@ -47,73 +102,49 @@ const userSchema = new Schema({
   },
 });
 
-// IMPROVED Password hashing middleware
+// Password hashing (your improved version, kept as is)
 userSchema.pre('save', async function (next) {
-  // Only proceed if password was modified
-  if (!this.isModified('password')) {
-    return next();
-  }
+  if (!this.isModified('password')) return next();
 
   try {
-    console.log('Pre-save hook: Password was modified for user:', this.email);
-    
-    // Check if password is already hashed
-    // Bcrypt hashes start with $2a$, $2b$, or $2y$ followed by the cost factor
     const bcryptHashRegex = /^\$2[ayb]\$[0-9]{2}\$/;
-    
-    if (bcryptHashRegex.test(this.password)) {
-      console.log('Pre-save hook: Password is already hashed, skipping hash process');
-      return next();
-    }
-    
-    console.log('Pre-save hook: Hashing raw password');
-    
-    // Hash the password with salt rounds of 10 (consistent across app)
+    if (bcryptHashRegex.test(this.password)) return next();
+
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
-    
-    console.log('Pre-save hook: Password hashed successfully');
 
-    // Clear reset token if password was changed
     if (this.resetToken) {
-      console.log('Pre-save hook: Clearing reset tokens');
       this.resetToken = undefined;
       this.resetTokenExpires = undefined;
       this.resetTokenUsed = true;
     }
-    
+
     next();
   } catch (err) {
-    console.error('Pre-save hook error:', err);
     return next(err);
   }
 });
 
-// Password comparison method
+// Compare password
 userSchema.methods.comparePassword = async function (candidatePassword) {
-  console.log('Comparing password for user:', this.email);
-  const isMatch = await bcrypt.compare(candidatePassword, this.password);
-  console.log('Password comparison result:', isMatch ? 'MATCH' : 'NO MATCH');
-  return isMatch;
+  return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Password reset token generation
+// Password reset token
 userSchema.methods.generatePasswordResetToken = function () {
   const resetToken = crypto.randomBytes(32).toString('hex');
   this.resetToken = resetToken;
-  this.resetTokenExpires = Date.now() + 3600000; // 1 hour
+  this.resetTokenExpires = Date.now() + 3600000; // 1h
   this.resetTokenUsed = false;
   return resetToken;
 };
 
-// Clear reset token
 userSchema.methods.clearPasswordResetToken = function () {
   this.resetToken = undefined;
   this.resetTokenExpires = undefined;
   this.resetTokenUsed = true;
 };
 
-// Check if reset token is valid
 userSchema.methods.isResetTokenValid = function (token) {
   return (
     this.resetToken === token &&
@@ -121,5 +152,26 @@ userSchema.methods.isResetTokenValid = function (token) {
     !this.resetTokenUsed
   );
 };
+
+// Generate library card number (static)
+userSchema.statics.generateLibraryCardNumber = async function () {
+  const lastUser = await this.findOne(
+    { libraryCardNumber: { $exists: true, $ne: null } },
+    { libraryCardNumber: 1 }
+  ).sort({ libraryCardNumber: -1 });
+
+  let nextNumber = 1000;
+  if (lastUser && lastUser.libraryCardNumber) {
+    const lastNumber = parseInt(lastUser.libraryCardNumber.replace('LC', ''));
+    nextNumber = lastNumber + 1;
+  }
+
+  return `LC${nextNumber}`;
+};
+
+// Indexes
+userSchema.index({ email: 1 });
+userSchema.index({ role: 1 });
+userSchema.index({ studentID: 1 }, { sparse: true });
 
 export default model('User', userSchema, 'lms_user');
