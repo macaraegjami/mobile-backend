@@ -38,18 +38,21 @@ router.get('/status/:studentID', async (req, res) => {
 router.post('/scan', async (req, res) => {
   try {
     const { studentID, firstName, lastName, course, yearLevel, purpose, email } = req.body;
-    const now = new Date();
-    const today = now.toLocaleDateString();
+    
+    // Force Philippine timezone
+    const now = new Date(new Date().toLocaleString("en-US", {
+      timeZone: "Asia/Manila"
+    }));
+    
+    const today = now.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      timeZone: 'Asia/Manila'
+    });
 
-    // ALWAYS create a new check-in record
     const newAttendance = new Attendance({
-      studentID, 
-      firstName, 
-      lastName, 
-      course, 
-      yearLevel, 
-      email, 
-      purpose,
+      studentID, firstName, lastName, course, yearLevel, email, purpose,
       checkInTime: now,
       scanDate: today,
       status: 'checked-in'
