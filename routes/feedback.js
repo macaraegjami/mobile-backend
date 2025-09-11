@@ -1,8 +1,9 @@
-import { Router } from "express";
+import { Router } from 'express';
 import Feedback from "../models/Feedback.js";
 import User from "../models/User.js";
 
-const router = Router
+
+const router = Router();
 
 router.post('/', async (req, res) => {
   const user = await User.findById(req.user._id);

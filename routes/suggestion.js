@@ -1,8 +1,9 @@
-import { Router } from "express";
+import { Router } from 'express';
 import Suggestion from "../models/Suggestion.js";
+import User from "../models/User.js";
 
 
-const router = Router
+const router = Router();
 
 router.post('/', async (req, res) => {
   try {
