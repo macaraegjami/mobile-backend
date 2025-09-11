@@ -11,21 +11,24 @@ router.post('/', async (req, res) => {
         const suggestion = new Suggestion(req.body);
         await suggestion.save();
 
-        // Only log activity if user is authenticated
-        if (req.user && req.user._id) {
-            const user = await User.findById(req.user._id);
-            await new Activity({
-                userId: user._id,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                email: user.email,
-                role: user.role,
-                action: 'suggestion_add',
-                details: 'User made a suggestion',
-                ipAddress: req.ip,
-                userAgent: req.headers['user-agent']
-            }).save();
+        // Use userId from request body if not authenticated
+        const userId = req.user?._id || req.body.userId;
 
+        if (userId) {
+            const user = await User.findById(userId);
+            if (user) {
+                await new Activity({
+                    userId: user._id,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    email: user.email,
+                    role: user.role,
+                    action: 'suggestion_add',
+                    details: 'User made a suggestion',
+                    ipAddress: req.ip,
+                    userAgent: req.headers['user-agent']
+                }).save();
+            }
         }
 
         res.status(201).json({ success: true, message: 'Suggestion submitted successfully' });

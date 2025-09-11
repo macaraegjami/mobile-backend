@@ -113,14 +113,11 @@ app.use('/api/suggestion',suggestionRoutes );
 
 
 
-
-
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).send('Something broke!');
 });
-
 
 
 const PORT = process.env.PORT || config.port || 3000;
