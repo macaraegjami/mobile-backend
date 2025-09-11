@@ -2,7 +2,7 @@
   const router = Router();
   import RoomReservation from '../models/RoomReservation.js';
   import Activity from '../models/Activity.js';
-  import authenticateToken from '../middleware/authenticateToken.js';
+  import authenticateToken from '../middleware/auth.js';
   import User from '../models/User.js'; // Add this import
 
   // POST - Create new reservation
