@@ -29,24 +29,19 @@ router.get('/status/:studentID', async (req, res) => {
       currentSession: currentCheckIn
     });
   } catch (error) {
+    console.error('Error checking attendance status:', error);
     res.status(500).json({ success: false, message: 'Error checking attendance status' });
   }
 });
 
-// ✅ Scan (ALWAYS create new check-in with CURRENT timestamp)
+// ✅ Scan (ALWAYS create new check-in)
 router.post('/scan', async (req, res) => {
   try {
     const { studentID, firstName, lastName, course, yearLevel, purpose, email } = req.body;
-    
-    // CRITICAL: Use current server time for accurate check-in timestamp
-    const currentTime = new Date();
-    const todayDateString = currentTime.toLocaleDateString('en-US', {
-      timeZone: 'Asia/Manila' // Adjust to your timezone
-    });
+    const now = new Date();
+    const today = now.toLocaleDateString();
 
-    console.log(`Check-in scan for ${studentID} at ${currentTime.toISOString()}`);
-
-    // ALWAYS create a new check-in record with current server time
+    // ALWAYS create a new check-in record
     const newAttendance = new Attendance({
       studentID, 
       firstName, 
@@ -55,38 +50,30 @@ router.post('/scan', async (req, res) => {
       yearLevel, 
       email, 
       purpose,
-      checkInTime: currentTime, // This is the ACTUAL check-in time
-      scanDate: todayDateString,
+      checkInTime: now,
+      scanDate: today,
       status: 'checked-in'
     });
 
     await newAttendance.save();
     
-    console.log(`Successfully saved check-in for ${studentID}:`, {
-      checkInTime: newAttendance.checkInTime,
-      scanDate: newAttendance.scanDate
-    });
-    
     res.json({ 
       success: true, 
       action: 'checkin', 
       message: 'Successfully checked in', 
-      attendance: newAttendance,
-      serverTime: currentTime.toISOString() // Send server time for verification
+      attendance: newAttendance 
     });
   } catch (error) {
-    console.error('Error during scan:', error);
+    console.error('Error processing attendance:', error);
     res.status(500).json({ success: false, message: 'Error processing attendance' });
   }
 });
 
-// ✅ Manual Checkout endpoint with CURRENT timestamp
+// ✅ Manual Checkout endpoint
 router.post('/checkout/:recordId', async (req, res) => {
   try {
     const { recordId } = req.params;
-    
-    // Use current server time for accurate checkout timestamp
-    const currentTime = new Date();
+    const now = new Date();
     
     const attendance = await Attendance.findById(recordId);
     
@@ -98,27 +85,13 @@ router.post('/checkout/:recordId', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Already checked out.' });
     }
     
-    // Calculate duration using ACTUAL timestamps
-    const checkInTime = new Date(attendance.checkInTime);
-    const durationMinutes = Math.round((currentTime - checkInTime) / (1000 * 60));
-    
-    attendance.checkOutTime = currentTime; // ACTUAL checkout time
+    attendance.checkOutTime = now;
     attendance.status = 'checked-out';
-    attendance.duration = durationMinutes;
+    attendance.duration = Math.round((now - attendance.checkInTime) / (1000 * 60));
     
     await attendance.save();
     
-    console.log(`Manual checkout for record ${recordId}:`, {
-      checkInTime: attendance.checkInTime,
-      checkOutTime: attendance.checkOutTime,
-      duration: durationMinutes
-    });
-    
-    res.json({ 
-      success: true, 
-      attendance,
-      serverTime: currentTime.toISOString()
-    });
+    res.json({ success: true, attendance });
   } catch (error) {
     console.error('Error during checkout:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -128,42 +101,29 @@ router.post('/checkout/:recordId', async (req, res) => {
 // ✅ Auto-checkout all records at end of day (run as cron job)
 router.post('/auto-checkout', async (req, res) => {
   try {
-    // Use current server time for auto-checkout
-    const currentTime = new Date();
-    const todayDateString = currentTime.toLocaleDateString('en-US', {
-      timeZone: 'Asia/Manila'
-    });
-    
-    console.log(`Auto-checkout process started at ${currentTime.toISOString()}`);
+    const now = new Date();
+    const today = now.toLocaleDateString();
     
     // Find all records from today that haven't been checked out
     const recordsToUpdate = await Attendance.find({
-      scanDate: todayDateString,
+      scanDate: today,
       checkOutTime: { $exists: false }
     });
     
     let updatedCount = 0;
     
     for (const record of recordsToUpdate) {
-      const checkInTime = new Date(record.checkInTime);
-      const durationMinutes = Math.round((currentTime - checkInTime) / (1000 * 60));
-      
-      record.checkOutTime = currentTime; // ACTUAL auto-checkout time
+      record.checkOutTime = now;
       record.status = 'auto-checkout';
-      record.duration = durationMinutes;
-      record.autoCheckoutNote = `Auto-checked out at ${currentTime.toLocaleString()}`;
-      
+      record.duration = Math.round((now - record.checkInTime) / (1000 * 60));
       await record.save();
       updatedCount++;
-      
-      console.log(`Auto-checkout record ${record._id}: ${durationMinutes} minutes`);
     }
     
     res.json({
       success: true,
       message: `Auto-checked out ${updatedCount} records`,
-      updatedCount,
-      autoCheckoutTime: currentTime.toISOString()
+      updatedCount
     });
   } catch (error) {
     console.error('Error during auto-checkout:', error);
@@ -174,21 +134,15 @@ router.post('/auto-checkout', async (req, res) => {
 // ✅ Get today's attendance
 router.get('/today', async (req, res) => {
   try {
-    const today = new Date().toLocaleDateString('en-US', {
-      timeZone: 'Asia/Manila'
-    });
-    
-    const attendanceRecords = await Attendance.find({ 
-      scanDate: today 
-    }).sort({ checkInTime: -1 }); // Sort by ACTUAL check-in time
+    const today = new Date().toLocaleDateString();
+    const attendanceRecords = await Attendance.find({ scanDate: today }).sort({ checkInTime: -1 });
 
     res.json({
       success: true,
       records: attendanceRecords,
       totalCheckedIn: attendanceRecords.filter(r => r.status === 'checked-in').length,
       totalCheckedOut: attendanceRecords.filter(r => r.status === 'checked-out').length,
-      totalAutoCheckout: attendanceRecords.filter(r => r.status === 'auto-checkout').length,
-      queryDate: today
+      totalAutoCheckout: attendanceRecords.filter(r => r.status === 'auto-checkout').length
     });
   } catch (error) {
     console.error('Error fetching today\'s attendance:', error);
@@ -196,98 +150,153 @@ router.get('/today', async (req, res) => {
   }
 });
 
-// ✅ Get all records for a student (FIXED - show actual timestamps)
+// ✅ Get all records for a student (IMPROVED - better data formatting)
 router.get('/student/:studentID', async (req, res) => {
   try {
     const { studentID } = req.params;
+    console.log('Fetching attendance for student ID:', studentID);
     
-    // Get records sorted by ACTUAL check-in time (most recent first)
     const records = await Attendance.find({ studentID }).sort({ checkInTime: -1 });
+    console.log('Found records:', records.length);
 
-    console.log(`Retrieved ${records.length} records for student ${studentID}`);
-
-    // Transform each record to display ACTUAL times (not current time)
-    const result = records.map(rec => {
-      const checkInTime = new Date(rec.checkInTime);
-      const checkOutTime = rec.checkOutTime ? new Date(rec.checkOutTime) : null;
+    // Transform each record for mobile app consumption
+    const transformedRecords = records.map(record => {
+      // Ensure dates are properly formatted
+      const checkInDate = new Date(record.checkInTime);
+      const checkOutDate = record.checkOutTime ? new Date(record.checkOutTime) : null;
       
       return {
-        id: rec._id,
-        date: rec.scanDate, // Use stored scan date
-        checkIn: checkInTime.toLocaleTimeString([], { 
+        id: record._id.toString(),
+        studentID: record.studentID,
+        firstName: record.firstName,
+        lastName: record.lastName,
+        course: record.course,
+        yearLevel: record.yearLevel,
+        email: record.email,
+        purpose: record.purpose || 'General',
+        checkInTime: record.checkInTime,
+        checkOutTime: record.checkOutTime,
+        checkIn: checkInDate.toLocaleTimeString([], { 
           hour: '2-digit', 
           minute: '2-digit', 
           hour12: true 
         }),
-        checkOut: checkOutTime ? checkOutTime.toLocaleTimeString([], { 
+        checkOut: checkOutDate ? checkOutDate.toLocaleTimeString([], { 
           hour: '2-digit', 
           minute: '2-digit', 
           hour12: true 
         }) : null,
-        purpose: rec.purpose || '',
-        rawDate: rec.checkInTime, // Use ACTUAL check-in time for sorting
-        status: rec.status,
-        duration: rec.duration,
-        // Include original timestamps for debugging
-        originalCheckInTime: rec.checkInTime,
-        originalCheckOutTime: rec.checkOutTime,
-        scanDate: rec.scanDate
+        date: checkInDate.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'numeric', 
+          day: 'numeric'
+        }),
+        rawDate: record.checkInTime.toISOString(),
+        scanDate: record.scanDate,
+        status: record.status,
+        duration: record.duration,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt
       };
     });
 
     res.json({ 
       success: true, 
-      records: result,
-      studentID: studentID
+      records: transformedRecords,
+      totalRecords: transformedRecords.length,
+      message: `Found ${transformedRecords.length} attendance records`
     });
   } catch (error) {
     console.error('Error fetching student attendance:', error);
-    res.status(500).json({ success: false, message: 'Error fetching attendance records' });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching attendance records',
+      error: error.message 
+    });
   }
 });
 
-// ✅ New endpoint: Get current check-in status for a student
-router.get('/current-status/:studentID', async (req, res) => {
+// ✅ Get attendance statistics for a student
+router.get('/student/:studentID/stats', async (req, res) => {
   try {
     const { studentID } = req.params;
+    const records = await Attendance.find({ studentID });
     
-    // Find active session (checked in but not checked out)
-    const activeSession = await Attendance.findOne({
-      studentID,
-      status: 'checked-in',
-      checkOutTime: { $exists: false }
-    }).sort({ checkInTime: -1 });
-
-    if (activeSession) {
-      const checkInTime = new Date(activeSession.checkInTime);
-      const currentTime = new Date();
-      const sessionDuration = Math.round((currentTime - checkInTime) / (1000 * 60));
-      
-      res.json({
-        success: true,
-        isActive: true,
-        session: {
-          id: activeSession._id,
-          checkInTime: activeSession.checkInTime,
-          checkInDisplay: checkInTime.toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit', 
-            hour12: true 
-          }),
-          duration: sessionDuration,
-          purpose: activeSession.purpose
-        }
-      });
-    } else {
-      res.json({
-        success: true,
-        isActive: false,
-        session: null
-      });
-    }
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    const stats = {
+      total: records.length,
+      thisMonth: records.filter(record => {
+        const recordDate = new Date(record.checkInTime);
+        return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
+      }).length,
+      thisWeek: records.filter(record => {
+        const recordDate = new Date(record.checkInTime);
+        return recordDate >= weekAgo;
+      }).length,
+      checkedIn: records.filter(r => r.status === 'checked-in').length,
+      checkedOut: records.filter(r => r.status === 'checked-out').length,
+      autoCheckout: records.filter(r => r.status === 'auto-checkout').length
+    };
+    
+    // Get latest record for current status
+    const latestRecord = records.sort((a, b) => new Date(b.checkInTime) - new Date(a.checkInTime))[0];
+    
+    res.json({
+      success: true,
+      stats,
+      latestRecord: latestRecord ? {
+        date: new Date(latestRecord.checkInTime).toLocaleDateString(),
+        checkIn: new Date(latestRecord.checkInTime).toLocaleTimeString([], { 
+          hour: '2-digit', 
+          minute: '2-digit', 
+          hour12: true 
+        }),
+        status: latestRecord.status
+      } : null
+    });
   } catch (error) {
-    console.error('Error checking current status:', error);
-    res.status(500).json({ success: false, message: 'Error checking current status' });
+    console.error('Error fetching student stats:', error);
+    res.status(500).json({ success: false, message: 'Error fetching attendance statistics' });
+  }
+});
+
+// ✅ Delete a specific attendance record (for admin use)
+router.delete('/:recordId', async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    const deletedRecord = await Attendance.findByIdAndDelete(recordId);
+    
+    if (!deletedRecord) {
+      return res.status(404).json({ success: false, message: 'Record not found' });
+    }
+    
+    res.json({ success: true, message: 'Record deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting record:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ✅ Update a specific attendance record
+router.put('/:recordId', async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    const updates = req.body;
+    
+    const updatedRecord = await Attendance.findByIdAndUpdate(recordId, updates, { new: true });
+    
+    if (!updatedRecord) {
+      return res.status(404).json({ success: false, message: 'Record not found' });
+    }
+    
+    res.json({ success: true, attendance: updatedRecord });
+  } catch (error) {
+    console.error('Error updating record:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
