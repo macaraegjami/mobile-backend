@@ -176,15 +176,17 @@ router.get('/student/:studentID', async (req, res) => {
         purpose: record.purpose || 'General',
         checkInTime: record.checkInTime,
         checkOutTime: record.checkOutTime,
-        checkIn: checkInDate.toLocaleTimeString([], { 
+        checkIn: checkInDate.toLocaleTimeString('en-US', { 
           hour: '2-digit', 
           minute: '2-digit', 
-          hour12: true 
+          hour12: true,
+          timeZone: 'Asia/Manila'
         }),
-        checkOut: checkOutDate ? checkOutDate.toLocaleTimeString([], { 
+        checkOut: checkOutDate ? checkOutDate.toLocaleTimeString('en-US', { 
           hour: '2-digit', 
           minute: '2-digit', 
-          hour12: true 
+          hour12: true,
+          timeZone: 'Asia/Manila'
         }) : null,
         date: checkInDate.toLocaleDateString('en-US', {
           year: 'numeric',
