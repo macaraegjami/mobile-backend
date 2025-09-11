@@ -11,18 +11,21 @@ router.post("/", async (req, res) => {
     if (!bookTitle) {
       return res.status(400).json({
         success: false,
+        message: "Submission failed",
         error: "Book title is required",
       });
     }
     if (!author) {
       return res.status(400).json({
         success: false,
+        message: "Submission failed",
         error: "Author is required",
       });
     }
     if (!reason) {
       return res.status(400).json({
         success: false,
+        message: "Submission failed",
         error: "Reason for suggestion is required",
       });
     }
@@ -39,6 +42,7 @@ router.post("/", async (req, res) => {
     console.error("Suggestion submission error:", error);
     res.status(500).json({
       success: false,
+      message: "Submission failed",
       error: error.message || "Internal server error",
     });
   }

@@ -11,12 +11,14 @@ router.post("/", async (req, res) => {
     if (!rating || rating < 1 || rating > 5) {
       return res.status(400).json({
         success: false,
+        message: "Submission failed",
         error: "Rating must be between 1 and 5",
       });
     }
     if (!comment) {
       return res.status(400).json({
         success: false,
+        message: "Submission failed",
         error: "Comment is required",
       });
     }
@@ -33,6 +35,7 @@ router.post("/", async (req, res) => {
     console.error("Feedback submission error:", error);
     res.status(500).json({
       success: false,
+      message: "Submission failed",
       error: error.message || "Internal server error",
     });
   }

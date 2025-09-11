@@ -49,29 +49,30 @@ router.post('/', authenticateToken, async (req, res) => {
 
     res.status(400).json({
       success: false,
-      error: 'Rating submission failed'
+      error: err.message || "Something went wrong",
+    });
+  }
+});
+
+// Get all ratings for a book
+router.get('/book/:bookId', async (req, res) => {
+  try {
+    const ratings = await BookRating.find({ bookId })
+      .populate('userId', 'firstName lastName')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: ratings
     });
 
-
-    // Get all ratings for a book
-    router.get('/book/:bookId', async (req, res) => {
-      try {
-        const ratings = await BookRating.find({ bookId })
-          .populate('userId', 'firstName lastName')
-          .sort({ createdAt: -1 });
-
-        res.json({
-          success: true,
-          data: ratings
-        });
-
-      } catch (error) {
-        res.status(500).json({
-          success: false,
-          message: 'Failed to fetch ratings',
-          error: error.message
-        });
-      }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch ratings',
+      error: error.message
     });
+  }
+});
 
-    export default router;
+export default router;
