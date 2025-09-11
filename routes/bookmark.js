@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import User from "../models/User.js";
 import Activity from '../models/Activity.js';
+<<<<<<< HEAD
 import LearningMaterial from '../models/LearningMaterial.js'; // Make sure to import this
 import auth from '../middleware/auth.js'; // Make sure to import auth middleware
 
@@ -24,6 +25,11 @@ router.get('/', auth, async (req, res) => {
 });
 
 // POST add bookmark
+=======
+
+const router = Router();
+
+>>>>>>> f8ff872bd559c5f15c092b9b180fd5e43c805b64
 router.post('/:materialId', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -74,6 +80,7 @@ router.post('/:materialId', auth, async (req, res) => {
   }
 });
 
+<<<<<<< HEAD
 // DELETE remove bookmark
 router.delete('/:materialId', auth, async (req, res) => {
   try {
@@ -111,4 +118,6 @@ router.delete('/:materialId', auth, async (req, res) => {
   }
 });
 
+=======
+>>>>>>> f8ff872bd559c5f15c092b9b180fd5e43c805b64
 export default router;
