@@ -1,0 +1,37 @@
+import { Router } from 'express';
+import Feedback from "../models/Feedback.js";
+import User from "../models/User.js";
+import Activity from "../models/Activity.js";
+
+const router = Router();
+
+router.post('/', async (req, res) => {
+  try {
+    const feedback = new Feedback(req.body);
+    await feedback.save();
+
+    // Only log activity if user is provided
+    if (req.body.userId) {
+      const user = await User.findById(req.body.userId);
+      if (user) {
+        await new Activity({
+          userId: user._id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+          action: 'feedback_add',
+          details: 'User made a feedback',
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent']
+        }).save();
+      }
+    }
+
+    res.status(201).json({ success: true, feedback });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+export default router;

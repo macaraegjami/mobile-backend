@@ -1,0 +1,44 @@
+[33mcommit 8e69c8e9f36ccf4689a83d9263b57c69ff41fdc7[m
+Author: teyamawi <teyaaaatawagon@gmail.com>
+Date:   Thu Sep 11 01:02:14 2025 +0800
+
+    Added/updated users.js file
+
+ .gitignore                     |    2 [32m+[m
+ config/cloudinary.js           |   13 [32m+[m
+ config/environment.js          |   56 [32m++[m
+ middleware/auth.js             |   37 [32m+[m
+ models/Activity.js             |   62 [32m++[m
+ models/ArchivesRequest.js      |   25 [32m+[m
+ models/Attendance.js           |   67 [32m++[m
+ models/BookRating.js           |   46 [32m++[m
+ models/BorrowRequest.js        |   27 [32m+[m
+ models/Feedback.js             |   52 [32m++[m
+ models/LearningMaterials.js    |   85 [32m+++[m
+ models/Notification.js         |   66 [32m++[m
+ models/ReserveRequest.js       |   45 [32m++[m
+ models/RoomReservation.js      |   20 [32m+[m
+ models/User.js                 |  100 [32m+++[m
+ package-lock.json              | 1616 [32m++++++++++++++++++++++++++++++++++++++++[m
+ package.json                   |   28 [32m+[m
+ routes/archiveRequest.js       |  258 [32m+++++++[m
+ routes/attendance.js           |  139 [32m++++[m
+ routes/auth.js                 | 1390 [32m++++++++++++++++++++++++++++++++++[m
+ routes/bookrating.js           |   79 [32m++[m
+ routes/borrow.js               |  617 [32m+++++++++++++++[m
+ routes/feedback.js             |   29 [32m+[m
+ routes/learningmat.js          |  397 [32m++++++++++[m
+ routes/notifications.js        |   98 [32m+++[m
+ routes/reserve.js              |  355 [32m+++++++++[m
+ routes/roomReservation.js      |  112 [32m+++[m
+ routes/users.js                |  168 [32m+++++[m
+ server.js                      |  132 [32m++++[m
+ services/ChatService.js        |  446 [32m+++++++++++[m
+ services/DeepSeekService.js    |  252 [32m+++++++[m
+ services/emailService.js       |  207 [32m+++++[m
+ utils/borrowUtils.js           |   65 [32m++[m
+ utils/materialStatusUpdater.js |   57 [32m++[m
+ utils/notificationService.js   |  286 [32m+++++++[m
+ utils/overdueChecker.js        |  117 [32m+++[m
+ utils/scheduler.js             |   59 [32m++[m
+ 37 files changed, 7610 insertions(+)
