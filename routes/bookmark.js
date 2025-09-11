@@ -1,14 +1,13 @@
 import { Router } from 'express';
 import User from "../models/User.js";
 import Activity from '../models/Activity.js';
-<<<<<<< HEAD
 import LearningMaterial from '../models/LearningMaterial.js'; // Make sure to import this
-import auth from '../middleware/auth.js'; // Make sure to import auth middleware
+import authenticateToken from '../middleware/auth.js'; // Make sure to import auth middleware
 
 const router = Router();
 
 // GET all bookmarks for a user
-router.get('/', auth, async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.user._id).populate('bookmarks');
     
@@ -25,12 +24,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // POST add bookmark
-=======
-
-const router = Router();
-
->>>>>>> f8ff872bd559c5f15c092b9b180fd5e43c805b64
-router.post('/:materialId', auth, async (req, res) => {
+router.post('/:materialId', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     const material = await LearningMaterial.findById(req.params.materialId);
@@ -80,9 +74,8 @@ router.post('/:materialId', auth, async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
 // DELETE remove bookmark
-router.delete('/:materialId', auth, async (req, res) => {
+router.delete('/:materialId', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     
@@ -118,6 +111,4 @@ router.delete('/:materialId', auth, async (req, res) => {
   }
 });
 
-=======
->>>>>>> f8ff872bd559c5f15c092b9b180fd5e43c805b64
 export default router;

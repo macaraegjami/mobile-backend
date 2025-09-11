@@ -29,10 +29,7 @@ import notificationRoutes from './routes/notifications.js'; // Adjust path as ne
 import attendanceRoutes from './routes/attendance.js'
 import feedbackRoutes from './routes/feedback.js'
 import suggestionRoutes from './routes/suggestion.js'
-<<<<<<< HEAD
 import bookmarkRoutes from './routes/bookmark.js'
-=======
->>>>>>> f8ff872bd559c5f15c092b9b180fd5e43c805b64
 
 
 // Initialize app
@@ -114,11 +111,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/attendance',attendanceRoutes );
 app.use('/api/feedback',feedbackRoutes );
 app.use('/api/suggestion',suggestionRoutes );
-<<<<<<< HEAD
 app.use('/api/bookmarks',bookmarkRoutes );
-=======
-
->>>>>>> f8ff872bd559c5f15c092b9b180fd5e43c805b64
 
 
 // Error handling middleware
