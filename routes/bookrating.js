@@ -32,7 +32,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     await newRating.save();
 
-    res.status(201).json({ 
+    res.status(201).json({
       success: true,
       message: 'Book rating submitted successfully!',
       data: newRating
@@ -46,34 +46,32 @@ router.post('/', authenticateToken, async (req, res) => {
         message: 'You have already rated this transaction'
       });
     }
-    
-    res.status(400).json({ 
+
+    res.status(400).json({
       success: false,
-      message: 'Rating submission failed',
-      error: error.message 
-    });
-  }
-});
-
-// Get all ratings for a book
-router.get('/book/:bookId', async (req, res) => {
-  try {
-    const ratings = await BookRating.find({ bookId })
-      .populate('userId', 'firstName lastName')
-      .sort({ createdAt: -1 });
-
-    res.json({ 
-      success: true,
-      data: ratings
+      error: 'Rating submission failed'
     });
 
-  } catch (error) {
-    res.status(500).json({ 
-      success: false,
-      message: 'Failed to fetch ratings',
-      error: error.message 
-    });
-  }
-});
 
-export default router;
+    // Get all ratings for a book
+    router.get('/book/:bookId', async (req, res) => {
+      try {
+        const ratings = await BookRating.find({ bookId })
+          .populate('userId', 'firstName lastName')
+          .sort({ createdAt: -1 });
+
+        res.json({
+          success: true,
+          data: ratings
+        });
+
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          message: 'Failed to fetch ratings',
+          error: error.message
+        });
+      }
+    });
+
+    export default router;
