@@ -3,8 +3,11 @@ import Suggestion from '../models/Suggestion.js';
 
 const router = express.Router();
 
+// POST /api/suggestion
 router.post('/', async (req, res) => {
   try {
+    console.log('Suggestion request received:', req.body);
+    
     const { bookTitle, author, edition, reason } = req.body;
 
     // Validation
@@ -36,9 +39,13 @@ router.post('/', async (req, res) => {
       reason: reason.trim()
     };
 
+    console.log('Creating suggestion:', suggestionData);
+    
     const suggestion = new Suggestion(suggestionData);
     await suggestion.save();
 
+    console.log('Suggestion saved successfully');
+    
     res.status(201).json({ 
       success: true, 
       message: 'Book suggestion submitted successfully',
@@ -47,10 +54,21 @@ router.post('/', async (req, res) => {
 
   } catch (error) {
     console.error('Suggestion submission error:', error);
-    res.status(400).json({ 
+    res.status(500).json({ 
       success: false, 
-      error: error.message || 'Failed to submit suggestion' 
+      error: 'Internal server error' 
     });
+  }
+});
+
+// GET /api/suggestion (for testing)
+router.get('/', async (req, res) => {
+  try {
+    const suggestions = await Suggestion.find().sort({ createdAt: -1 });
+    res.json({ success: true, suggestions });
+  } catch (error) {
+    console.error('Error fetching suggestions:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
