@@ -3,6 +3,7 @@ const router = Router();
 import RoomReservation from '../models/RoomReservation.js';
 import Activity from '../models/Activity.js';
 import authenticateToken from '../middleware/authenticateToken.js';
+import User from '../models/User.js'; // Add this import
 
 // POST - Create new reservation
 router.post('/', authenticateToken, async (req, res) => {
@@ -13,13 +14,16 @@ router.post('/', authenticateToken, async (req, res) => {
     });
     await reservation.save();
 
+    // Get user details for activity log
+    const user = await User.findById(req.user._id);
+    
     // Activity log
     await new Activity({
       userId: req.user._id,
-      firstName: req.user.firstName,
-      lastName: req.user.lastName,
-      email: req.user.email,
-      role: req.user.role, // patron or admin
+      firstName: user.firstName, // Use populated user data
+      lastName: user.lastName,
+      email: user.email,
+      role: user.role, // patron or admin
       action: 'roomreserve_add',
       details: `Reserved room: ${reservation.room} on ${reservation.date.toLocaleDateString()} at ${reservation.time} for "${reservation.purpose}"`,
       ipAddress: req.ip,
@@ -35,32 +39,8 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-
-// GET - All reservations
-router.get('/', async (req, res) => {
-  try {
-    const reservations = await RoomReservation.find().populate('userId', 'name email');
-    res.json(reservations);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// GET - Single reservation by ID
-router.get('/:id', async (req, res) => {
-  try {
-    const reservation = await RoomReservation.findById(req.params.id);
-    if (!reservation) {
-      return res.status(404).json({ message: 'Reservation not found' });
-    }
-    res.json(reservation);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // PUT - Update reservation
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => { // Add authenticateToken middleware
   try {
     const updatedReservation = await RoomReservation.findByIdAndUpdate(
       req.params.id,
@@ -72,13 +52,16 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Reservation not found' });
     }
 
+    // Get user details for activity log
+    const user = await User.findById(req.user._id);
+
     // Add Activity log for reservation update
     await new Activity({
       userId: updatedReservation.userId,
-      firstName: req.user?.firstName,
-      lastName: req.user?.lastName,
-      email: req.user?.email,
-      role: req.user?.role,
+      firstName: user.firstName, // Use populated user data
+      lastName: user.lastName,
+      email: user.email,
+      role: user.role,
       action: 'roomreserve_update',
       details: `Updated reservation for room: ${updatedReservation.room} on ${updatedReservation.date.toLocaleDateString()} at ${updatedReservation.time}`,
       ipAddress: req.ip,
@@ -92,7 +75,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // PATCH - Update reservation status
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status', authenticateToken, async (req, res) => { // Add authenticateToken middleware
   try {
     const { status } = req.body;
     const reservation = await RoomReservation.findById(req.params.id);
@@ -113,13 +96,16 @@ router.patch('/:id/status', async (req, res) => {
     reservation.status = status.toLowerCase();
     await reservation.save();
 
+    // Get user details for activity log
+    const user = await User.findById(req.user._id);
+
     // Add Activity log for status change
     await new Activity({
       userId: reservation.userId,
-      firstName: req.user?.firstName,
-      lastName: req.user?.lastName,
-      email: req.user?.email,
-      role: req.user?.role,
+      firstName: user.firstName, // Use populated user data
+      lastName: user.lastName,
+      email: user.email,
+      role: user.role,
       action: 'status_change',
       details: `Room reservation status changed to "${status}" for room: ${reservation.room} on ${reservation.date.toLocaleDateString()} at ${reservation.time}`,
       ipAddress: req.ip,
@@ -140,7 +126,7 @@ router.patch('/:id/status', async (req, res) => {
 });
 
 // DELETE - Cancel reservation instead of hard delete
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => { // Add authenticateToken middleware
   try {
     const reservation = await RoomReservation.findById(req.params.id);
     if (!reservation) {
@@ -151,13 +137,16 @@ router.delete('/:id', async (req, res) => {
     reservation.status = 'cancelled';
     await reservation.save();
 
+    // Get user details for activity log
+    const user = await User.findById(req.user._id);
+
     // Add Activity log for cancellation
     await new Activity({
       userId: reservation.userId,
-      firstName: req.user?.firstName,
-      lastName: req.user?.lastName,
-      email: req.user?.email,
-      role: req.user?.role,
+      firstName: user.firstName, // Use populated user data
+      lastName: user.lastName,
+      email: user.email,
+      role: user.role,
       action: 'status_change',
       details: `Cancelled room reservation for room: ${reservation.room} on ${reservation.date.toLocaleDateString()} at ${reservation.time}`,
       ipAddress: req.ip,
