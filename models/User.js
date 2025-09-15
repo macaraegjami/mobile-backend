@@ -102,7 +102,7 @@ const userSchema = new Schema({
   },
 });
 
-// Password hashing (your improved version, kept as is)
+// Password hashing
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
 
@@ -169,9 +169,7 @@ userSchema.statics.generateLibraryCardNumber = async function () {
   return `LC${nextNumber}`;
 };
 
-// Indexes
-userSchema.index({ email: 1 });
+// ✅ Only keep role index
 userSchema.index({ role: 1 });
-userSchema.index({ studentID: 1 }, { sparse: true });
 
 export default model('User', userSchema, 'lms_user');
