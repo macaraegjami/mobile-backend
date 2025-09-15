@@ -91,13 +91,6 @@ router.post('/', async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    // 5. Send Notification
-    await NotificationService.createNotification(
-      newReservation.userId,
-      'reservation_created',
-      'Reservation Submitted',
-      `Your reservation for "${newReservation.bookTitle}" has been submitted successfully.`
-    );
 
     // 6. Activity Logging
     const user = await User.findById(newReservation.userId);

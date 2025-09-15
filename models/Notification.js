@@ -10,7 +10,6 @@ const notificationSchema = new Schema({
   type: {
     type: String,
     enum: [
-      'reservation_created',
       'reservation_approved',
       'reservation_cancelled', 
       'reservation_rejected',
