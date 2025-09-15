@@ -91,6 +91,14 @@ router.post('/', async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
+     // 5. Send notification - FIXED: Use valid notification type
+    await NotificationService.createNotification(
+      newReservation.userId,
+      'reservation', // Changed from 'reservation_created' to valid type
+      'Reservation Created',
+      `Your reservation for "${newReservation.bookTitle}" has been created successfully.`
+    );
+
     // 6. Activity Logging
     const user = await User.findById(newReservation.userId);
     await new Activity({
