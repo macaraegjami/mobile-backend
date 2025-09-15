@@ -4,10 +4,13 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import fileUpload from 'express-fileupload';
+
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import morgan from 'morgan';
 import { updateMaterialStatuses } from './utils/materialStatusUpdater.js';
 import { updateOverdueStatus, checkUnclaimedRequests } from './utils/borrowUtils.js'
+
 
 // 🛠️ Fix: Define __dirname early
 const __filename = fileURLToPath(import.meta.url);
@@ -70,6 +73,15 @@ app.use(fileUpload({
     tempFileDir: '/tmp/'
 }));
 
+app.use(morgan('combined'));
+
+// Catch all errors
+app.use((err, req, res, next) => {
+  console.error(`❌ Error on ${req.method} ${req.url}:`, err.stack);
+  res.status(500).json({ message: 'Something broke!', error: err.message });
+});
+
+
 // Serve static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -119,6 +131,7 @@ app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).send('Something broke!');
 });
+
 
 
 const PORT = process.env.PORT || config.port || 3000;
