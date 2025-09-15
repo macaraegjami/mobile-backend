@@ -89,14 +89,6 @@ router.post('/', async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    // 5. Send Notification
-    await NotificationService.createNotification(
-      newBorrow.userId,
-      'borrow_request_created',
-      'Borrow Request Submitted',
-      `Your borrow request for "${newBorrow.bookTitle}" has been submitted successfully.`
-    );
-
     // 6. Activity Logging
     await new Activity({
       userId: user._id,
