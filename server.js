@@ -56,6 +56,11 @@ app.use(fileUpload({
   useTempFiles: true,
   tempFileDir: '/tmp/'
 }));
+app.use((req, res, next) => {
+  logToFile(`${req.method} ${req.url} from ${req.ip}`);
+  next();
+});
+
 
 // -------------------- Routes --------------------
 import authRoutes from './routes/auth.js';
