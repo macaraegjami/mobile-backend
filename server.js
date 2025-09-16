@@ -30,6 +30,7 @@ import attendanceRoutes from './routes/attendance.js'
 import feedbackRoutes from './routes/feedback.js'
 import suggestionRoutes from './routes/suggestion.js'
 import bookmarkRoutes from './routes/bookmark.js'
+import historyRoutes from './routes/history.js';
 
 
 // Initialize app
@@ -112,6 +113,7 @@ app.use('/api/attendance',attendanceRoutes );
 app.use('/api/feedback',feedbackRoutes );
 app.use('/api/suggestion',suggestionRoutes );
 app.use('/api/bookmarks',bookmarkRoutes );
+app.use('/api/history', historyRoutes);
 
 
 // Error handling middleware
