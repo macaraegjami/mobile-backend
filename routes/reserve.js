@@ -31,7 +31,7 @@ const NotificationService = {
   }
 };
 
-// POST - Create reservation (with enhanced features)
+// POST - Create reservation (with enhanced features + validation)
 router.post('/', async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -43,6 +43,28 @@ router.post('/', async (req, res) => {
       await session.abortTransaction();
       return res.status(400).json({
         error: 'Missing required fields (bookId, pickupDate, bookTitle)'
+      });
+    }
+
+    // ✅ Convert dates
+    const now = new Date();
+    const pickup = new Date(pickupDate);
+    const reservation = reservationDate ? new Date(reservationDate) : new Date();
+
+    // ✅ Validation: weekdays only
+    if ([0, 6].includes(pickup.getDay()) || [0, 6].includes(reservation.getDay())) {
+      await session.abortTransaction();
+      return res.status(400).json({ error: 'Reservation and pickup dates must be on weekdays.' });
+    }
+
+    // ✅ Validation: library hours (9AM - 5PM)
+    if (
+      reservation.toDateString() === now.toDateString() &&
+      (now.getHours() < 9 || now.getHours() >= 17)
+    ) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        error: 'Library is closed. Please select the next available pickup date.'
       });
     }
 
@@ -70,11 +92,12 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // ✅ Create reservation (status: pending)
     const newReservation = new ReserveRequest({
       bookTitle,
       author: author || material.author || 'Unknown Author',
-      reservationDate: reservationDate ? new Date(reservationDate) : new Date(),
-      pickupDate: new Date(pickupDate),
+      reservationDate: reservation,
+      pickupDate: pickup,
       bookId: bookId,
       userId: userId || userInfo.userId || req.user._id,
       userName: userName || userInfo.userName || `${req.user.firstName} ${req.user.lastName}`,
@@ -90,7 +113,6 @@ router.post('/', async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
-    
 
     // 6. Activity Logging
     const user = await User.findById(newReservation.userId);
@@ -122,6 +144,7 @@ router.post('/', async (req, res) => {
     });
   }
 });
+
 
 // 9. Add Admin Endpoints (with proper authorization check)
 router.get('/admin/all-requests', async (req, res) => {
@@ -187,9 +210,9 @@ router.patch('/:id/status', async (req, res) => {
         returnDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         status: 'borrowed'
       });
-      
+
       await newBorrow.save({ session });
-      
+
     } else if (status === 'cancelled' || status === 'rejected') {
       // Return the copy to available pool
       if (material) {
