@@ -28,10 +28,34 @@ router.get('/', async (req, res) => {
       filter.typeofmat = req.query.typeofmat;
     }
 
-    // Debug log the filter being applied
-    console.log('Applying filter:', filter);
+    // Build sort object based on query parameters
+    let sort = {};
+    if (req.query.sort) {
+      // Handle sort parameter (e.g., '-createdAt' for descending)
+      const sortField = req.query.sort;
+      if (sortField.startsWith('-')) {
+        // Descending order
+        sort[sortField.substring(1)] = -1;
+      } else {
+        // Ascending order
+        sort[sortField] = 1;
+      }
+    } else {
+      // Default sort by createdAt descending (newest first)
+      sort = { createdAt: -1 };
+    }
 
-    const materials = await LearningMaterial.find(filter).lean();
+    // Debug log the filter and sort being applied
+    console.log('Applying filter:', filter);
+    console.log('Applying sort:', sort);
+
+    // Apply limit if provided
+    let query = LearningMaterial.find(filter).sort(sort);
+    if (req.query.limit) {
+      query = query.limit(parseInt(req.query.limit));
+    }
+
+    const materials = await query.lean();
 
     // Debug log the number of results
     console.log(`Found ${materials.length} materials matching filter`);
@@ -47,6 +71,7 @@ router.get('/', async (req, res) => {
       availableCopies: material.availableCopies,
       totalCopies: material.totalCopies,
       typeofmat: material.typeofmat,
+      createdAt: material.createdAt, // Make sure to include this field
 
       // ✅ add these fields
       accessionNumber: material.accessionNumber,
@@ -55,7 +80,6 @@ router.get('/', async (req, res) => {
       isbn: material.isbn,
       issn: material.issn,
     }));
-
 
     res.json({
       success: true,
