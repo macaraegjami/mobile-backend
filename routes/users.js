@@ -12,22 +12,26 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Get user history
-router.get('/:userId/history', authenticateToken, async (req, res) => {
+// Add to history
+router.post('/:userId/history', authenticateToken, async (req, res) => {
   try {
     if (req.user._id.toString() !== req.params.userId) {
       return res.status(403).json({
         success: false,
-        error: 'Unauthorized to access this history'
+        error: 'Unauthorized to add to this history'
       });
     }
 
-    const user = await User.findById(req.params.userId)
-      .populate({
-        path: 'history.book',
-        select: 'title author imageUrl description'
-      })
-      .select('history');
+    const { bookId } = req.body;
+
+    if (!bookId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Book ID is required'
+      });
+    }
+
+    const user = await User.findById(req.params.userId);
 
     if (!user) {
       return res.status(404).json({
@@ -36,16 +40,101 @@ router.get('/:userId/history', authenticateToken, async (req, res) => {
       });
     }
 
+    // Remove existing entry if it exists to avoid duplicates
+    user.history = user.history.filter(item => item.book.toString() !== bookId);
+
+    // Add new entry at the beginning
+    user.history.unshift({
+      book: bookId,
+      viewedAt: new Date()
+    });
+
+    // Limit history to 50 items
+    if (user.history.length > 50) {
+      user.history = user.history.slice(0, 50);
+    }
+
+    await user.save();
+
     res.json({
       success: true,
-      data: user.history || []
+      message: 'Book added to history'
     });
   } catch (error) {
-    console.error('History fetch error:', error);
+    console.error('History add error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch history',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: 'Failed to add to history'
+    });
+  }
+});
+
+// Clear all history
+router.delete('/:userId/history', authenticateToken, async (req, res) => {
+  try {
+    if (req.user._id.toString() !== req.params.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized to clear this history'
+      });
+    }
+
+    const user = await User.findById(req.params.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    user.history = [];
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'History cleared successfully'
+    });
+  } catch (error) {
+    console.error('History clear error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to clear history'
+    });
+  }
+});
+
+// Remove single item from history
+router.delete('/:userId/history/:bookId', authenticateToken, async (req, res) => {
+  try {
+    if (req.user._id.toString() !== req.params.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized to modify this history'
+      });
+    }
+
+    const user = await User.findById(req.params.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    user.history = user.history.filter(item => item.book.toString() !== req.params.bookId);
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Book removed from history'
+    });
+  } catch (error) {
+    console.error('History remove item error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to remove item from history'
     });
   }
 });
@@ -151,13 +240,13 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     // Hash new password with same salt rounds as registration
     const saltRounds = 10; // Use consistent salt rounds
     const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
-    
+
     console.log('New password hashed successfully');
 
     // Update password directly without triggering pre-save hooks
     await User.findByIdAndUpdate(
       userId,
-      { 
+      {
         password: hashedNewPassword,
         // Clear any reset tokens if they exist
         resetToken: undefined,
