@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
       .populate({
         path: 'history.material',
         model: 'LearningMaterial',
-        select: 'name author description imageUrl status availableCopies'
+        select: 'name author imageUrl typeofmat yearofpub'
       })
       .select('history');
 
