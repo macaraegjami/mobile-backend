@@ -41,7 +41,7 @@ router.post('/:userId/history', authenticateToken, async (req, res) => {
     }
 
     // Remove existing entry if it exists to avoid duplicates
-    user.history = user.history.filter(item => item.book.toString() !== bookId);
+    user.history = user.history.filter(item => item.material.toString() !== bookId);
 
     // Add new entry at the beginning
     user.history.unshift({
@@ -123,7 +123,7 @@ router.delete('/:userId/history/:bookId', authenticateToken, async (req, res) =>
       });
     }
 
-    user.history = user.history.filter(item => item.book.toString() !== req.params.bookId);
+    user.history = user.history.filter(item => item.material.toString() !== req.params.bookId);
     await user.save();
 
     res.json({
