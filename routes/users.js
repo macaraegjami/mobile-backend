@@ -1,6 +1,7 @@
 import express from 'express';
 import authenticateToken from '../middleware/auth.js';
 import User from '../models/User.js';
+import LearningMaterial from '../models/LearningMaterial.js';
 import cloudinary from '../config/cloudinary.js';
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -12,26 +13,22 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Add to history
-router.post('/:userId/history', authenticateToken, async (req, res) => {
+// Get user history
+router.get('/:userId/history', authenticateToken, async (req, res) => {
   try {
     if (req.user._id.toString() !== req.params.userId) {
       return res.status(403).json({
         success: false,
-        error: 'Unauthorized to add to this history'
+        error: 'Unauthorized to access this history'
       });
     }
 
-    const { bookId } = req.body;
-
-    if (!bookId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Book ID is required'
-      });
-    }
-
-    const user = await User.findById(req.params.userId);
+    const user = await User.findById(req.params.userId)
+      .populate({
+        path: 'history.material',
+        select: 'name title author imageUrl description status availableCopies totalCopies typeofmat isbn issn accessionNumber yearofpub edition'
+      })
+      .select('history');
 
     if (!user) {
       return res.status(404).json({
@@ -40,8 +37,88 @@ router.post('/:userId/history', authenticateToken, async (req, res) => {
       });
     }
 
-    // Remove existing entry if it exists to avoid duplicates
-    user.history = user.history.filter(item => item.material.toString() !== bookId);
+    // Transform the data to match frontend expectations
+    const historyData = user.history.map(item => {
+      if (!item.material) return null; // Skip if material was deleted
+      
+      const material = item.material;
+      return {
+        _id: material._id,
+        name: material.name || material.title,
+        title: material.name || material.title,
+        author: material.author,
+        imageUrl: material.imageUrl || 'https://via.placeholder.com/150x200?text=No+Cover',
+        description: material.description || 'No description available',
+        status: material.status,
+        availableCopies: material.availableCopies,
+        totalCopies: material.totalCopies,
+        typeofmat: material.typeofmat,
+        isbn: material.isbn,
+        issn: material.issn,
+        accessionNumber: material.accessionNumber,
+        yearofpub: material.yearofpub,
+        edition: material.edition,
+        viewedAt: item.viewedAt
+      };
+    }).filter(item => item !== null); // Remove null items
+
+    // Sort by viewedAt descending (most recent first)
+    historyData.sort((a, b) => new Date(b.viewedAt) - new Date(a.viewedAt));
+
+    res.json({
+      success: true,
+      data: historyData
+    });
+  } catch (error) {
+    console.error('History fetch error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch history',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Add item to user history
+router.post('/:userId/history', authenticateToken, async (req, res) => {
+  try {
+    if (req.user._id.toString() !== req.params.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized to modify this history'
+      });
+    }
+
+    const { bookId } = req.body;
+    
+    if (!bookId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Book ID is required'
+      });
+    }
+
+    // Verify the material exists
+    const material = await LearningMaterial.findById(bookId);
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        error: 'Book not found'
+      });
+    }
+
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Remove existing entry if it exists
+    user.history = user.history.filter(item => 
+      item.material.toString() !== bookId.toString()
+    );
 
     // Add new entry at the beginning
     user.history.unshift({
@@ -49,7 +126,7 @@ router.post('/:userId/history', authenticateToken, async (req, res) => {
       viewedAt: new Date()
     });
 
-    // Limit history to 50 items
+    // Keep only last 50 items
     if (user.history.length > 50) {
       user.history = user.history.slice(0, 50);
     }
@@ -58,48 +135,15 @@ router.post('/:userId/history', authenticateToken, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Book added to history'
+      message: 'Item added to history successfully'
     });
+
   } catch (error) {
-    console.error('History add error:', error);
+    console.error('Add to history error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to add to history'
-    });
-  }
-});
-
-// Clear all history
-router.delete('/:userId/history', authenticateToken, async (req, res) => {
-  try {
-    if (req.user._id.toString() !== req.params.userId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Unauthorized to clear this history'
-      });
-    }
-
-    const user = await User.findById(req.params.userId);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found'
-      });
-    }
-
-    user.history = [];
-    await user.save();
-
-    res.json({
-      success: true,
-      message: 'History cleared successfully'
-    });
-  } catch (error) {
-    console.error('History clear error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to clear history'
+      error: 'Failed to add item to history',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -114,8 +158,9 @@ router.delete('/:userId/history/:bookId', authenticateToken, async (req, res) =>
       });
     }
 
-    const user = await User.findById(req.params.userId);
+    const { userId, bookId } = req.params;
 
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -123,18 +168,60 @@ router.delete('/:userId/history/:bookId', authenticateToken, async (req, res) =>
       });
     }
 
-    user.history = user.history.filter(item => item.material.toString() !== req.params.bookId);
+    // Remove the item from history
+    user.history = user.history.filter(item => 
+      item.material.toString() !== bookId.toString()
+    );
+
     await user.save();
 
     res.json({
       success: true,
-      message: 'Book removed from history'
+      message: 'Item removed from history successfully'
     });
+
   } catch (error) {
-    console.error('History remove item error:', error);
+    console.error('Remove from history error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to remove item from history'
+      error: 'Failed to remove item from history',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Clear all history
+router.delete('/:userId/history', authenticateToken, async (req, res) => {
+  try {
+    if (req.user._id.toString() !== req.params.userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized to modify this history'
+      });
+    }
+
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    user.history = [];
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'History cleared successfully'
+    });
+
+  } catch (error) {
+    console.error('Clear history error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to clear history',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -240,13 +327,13 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     // Hash new password with same salt rounds as registration
     const saltRounds = 10; // Use consistent salt rounds
     const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
-
+    
     console.log('New password hashed successfully');
 
     // Update password directly without triggering pre-save hooks
     await User.findByIdAndUpdate(
       userId,
-      {
+      { 
         password: hashedNewPassword,
         // Clear any reset tokens if they exist
         resetToken: undefined,
@@ -284,6 +371,5 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     });
   }
 });
-
 
 export default router;
