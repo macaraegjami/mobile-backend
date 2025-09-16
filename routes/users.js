@@ -45,7 +45,7 @@ router.post('/:userId/history', authenticateToken, async (req, res) => {
 
     // Add new entry at the beginning
     user.history.unshift({
-      book: bookId,
+      material: bookId,
       viewedAt: new Date()
     });
 
