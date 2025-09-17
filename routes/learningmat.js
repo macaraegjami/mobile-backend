@@ -16,128 +16,178 @@ const asyncHandler = fn => (req, res, next) => {
   });
 };
 
-// Combined and improved single GET endpoint for materials
-router.get('/', async (req, res) => {
-  try {
-    // Debug log the query parameters
-    console.log('Query params:', req.query);
-
-    // Filter by type if provided
-    const filter = {};
-    if (req.query.typeofmat) {
-      filter.typeofmat = req.query.typeofmat;
-    }
-
-    // Build sort object based on query parameters
-    let sort = {};
-    if (req.query.sort) {
-      // Handle sort parameter (e.g., '-createdAt' for descending)
-      const sortField = req.query.sort;
-      if (sortField.startsWith('-')) {
-        // Descending order
-        sort[sortField.substring(1)] = -1;
-      } else {
-        // Ascending order
-        sort[sortField] = 1;
-      }
-    } else {
-      // Default sort by createdAt descending (newest first)
-      sort = { createdAt: -1 };
-    }
-
-    // Debug log the filter and sort being applied
-    console.log('Applying filter:', filter);
-    console.log('Applying sort:', sort);
-
-    // Apply limit if provided
-    let query = LearningMaterial.find(filter).sort(sort);
-    if (req.query.limit) {
-      query = query.limit(parseInt(req.query.limit));
-    }
-
-    const materials = await query.lean();
-
-    // Debug log the number of results
-    console.log(`Found ${materials.length} materials matching filter`);
-
-    // Format the response to match what frontend expects
-    const formattedMaterials = materials.map(material => ({
-      _id: material._id,
-      name: material.name,
-      author: material.author,
-      description: material.description,
-      imageUrl: material.imageUrl || 'https://via.placeholder.com/150x200?text=No+Cover',
-      status: material.status,
-      availableCopies: material.availableCopies,
-      totalCopies: material.totalCopies,
-      typeofmat: material.typeofmat,
-      createdAt: material.createdAt, // Make sure to include this field
-
-      // ✅ add these fields
-      accessionNumber: material.accessionNumber,
-      edition: material.edition,
-      yearofpub: material.yearofpub,
-      isbn: material.isbn,
-      issn: material.issn,
-    }));
-
-    res.json({
-      success: true,
-      data: formattedMaterials
-    });
-  } catch (err) {
-    console.error('Error fetching materials:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch materials',
-      error: err.message
-    });
+// GET availability status for a specific material
+router.get('/:id/availability', asyncHandler(async (req, res) => {
+  const material = await LearningMaterial.findById(req.params.id)
+    .select('name availableCopies totalCopies status');
+  
+  if (!material) {
+    return res.status(404).json({ error: 'Material not found' });
   }
-});
+  
+  res.json({
+    _id: material._id,
+    name: material.name,
+    availableCopies: material.availableCopies,
+    totalCopies: material.totalCopies,
+    status: material.status,
+    isAvailable: material.availableCopies > 0
+  });
+}));
+
+// Combined and improved single GET endpoint for materials
+router.get('/', asyncHandler(async (req, res) => {
+  // Debug log the query parameters
+  console.log('Query params:', req.query);
+
+  // Filter by type if provided
+  const filter = {};
+  if (req.query.typeofmat) {
+    filter.typeofmat = req.query.typeofmat;
+  }
+
+  // Add status filter if provided
+  if (req.query.status) {
+    filter.status = req.query.status;
+  }
+
+  // Add available copies filter
+  if (req.query.available === 'true') {
+    filter.availableCopies = { $gt: 0 };
+  }
+
+  // Build sort object based on query parameters
+  let sort = {};
+  if (req.query.sort) {
+    // Handle sort parameter (e.g., '-createdAt' for descending)
+    const sortField = req.query.sort;
+    if (sortField.startsWith('-')) {
+      // Descending order
+      sort[sortField.substring(1)] = -1;
+    } else {
+      // Ascending order
+      sort[sortField] = 1;
+    }
+  } else {
+    // Default sort by createdAt descending (newest first)
+    sort = { createdAt: -1 };
+  }
+
+  // Debug log the filter and sort being applied
+  console.log('Applying filter:', filter);
+  console.log('Applying sort:', sort);
+
+  // Apply limit if provided
+  let query = LearningMaterial.find(filter).sort(sort);
+  if (req.query.limit) {
+    query = query.limit(parseInt(req.query.limit));
+  }
+
+  const materials = await query.lean();
+
+  // Debug log the number of results
+  console.log(`Found ${materials.length} materials matching filter`);
+
+  // Format the response to match what frontend expects
+  const formattedMaterials = materials.map(material => ({
+    _id: material._id,
+    name: material.name,
+    author: material.author,
+    description: material.description,
+    imageUrl: material.imageUrl || 'https://via.placeholder.com/150x200?text=No+Cover',
+    status: material.status || (material.availableCopies > 0 ? 'available' : 'borrowed'),
+    availableCopies: material.availableCopies,
+    totalCopies: material.totalCopies,
+    typeofmat: material.typeofmat,
+    createdAt: material.createdAt,
+    accessionNumber: material.accessionNumber,
+    edition: material.edition,
+    yearofpub: material.yearofpub,
+    isbn: material.isbn,
+    issn: material.issn,
+    // Add calculated availability field
+    isAvailable: material.availableCopies > 0
+  }));
+
+  res.json({
+    success: true,
+    data: formattedMaterials
+  });
+}));
 
 // GET a specific learning material by ID
-router.get('/:id', async (req, res) => {
-  try {
-    const material = await LearningMaterial.findById(req.params.id);
-    if (!material) {
-      return res.status(404).json({ message: 'Learning material not found' });
-    }
-
-    res.json(material);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+router.get('/:id', asyncHandler(async (req, res) => {
+  const material = await LearningMaterial.findById(req.params.id);
+  if (!material) {
+    return res.status(404).json({ message: 'Learning material not found' });
   }
-});
 
-router.get('/:id/status', async (req, res) => {
-  try {
-    const material = await LearningMaterial.findById(req.params.id);
-    if (!material) {
-      return res.status(404).json({ error: 'Material not found' });
-    }
-    res.json({ status: material.status });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  // Ensure status is calculated correctly
+  const materialWithStatus = {
+    ...material.toObject(),
+    status: material.status || (material.availableCopies > 0 ? 'available' : 'borrowed'),
+    isAvailable: material.availableCopies > 0
+  };
+
+  res.json(materialWithStatus);
+}));
+
+// GET status endpoint
+router.get('/:id/status', asyncHandler(async (req, res) => {
+  const material = await LearningMaterial.findById(req.params.id);
+  if (!material) {
+    return res.status(404).json({ error: 'Material not found' });
   }
-});
+  
+  const status = material.status || (material.availableCopies > 0 ? 'available' : 'borrowed');
+  res.json({ 
+    status,
+    availableCopies: material.availableCopies,
+    totalCopies: material.totalCopies,
+    isAvailable: material.availableCopies > 0
+  });
+}));
 
-// Add this to your learningmat.js routes file
-router.delete('/:id', async (req, res) => {
-  try {
-    const deletedMat = await LearningMaterial.findByIdAndDelete(req.params.id);
-    if (!deletedMat) {
-      return res.status(404).json({ message: 'Learning material not found' });
-    }
-
-    res.status(200).json({ message: 'Learning material deleted successfully' });
-  } catch (error) {
-    console.error("Delete error:", error);
-    res.status(500).json({
-      message: 'Failed to delete learning material',
-      error: error.message
-    });
+// PATCH route to fix status based on available copies
+router.patch('/:id/fix-status', authenticateToken, asyncHandler(async (req, res) => {
+  const material = await LearningMaterial.findById(req.params.id);
+  if (!material) {
+    return res.status(404).json({ error: 'Material not found' });
   }
-});
+  
+  console.log('Before fix - Available copies:', material.availableCopies, 'Status:', material.status);
+  
+  // Fix the status based on available copies
+  if (material.availableCopies > 0) {
+    material.status = 'available';
+  } else {
+    material.status = 'borrowed';
+  }
+  
+  await material.save();
+  
+  console.log('After fix - Available copies:', material.availableCopies, 'Status:', material.status);
+  
+  res.json({ message: 'Status fixed', material });
+}));
+
+// Debug endpoint
+router.get('/:id/debug', asyncHandler(async (req, res) => {
+  const material = await LearningMaterial.findById(req.params.id);
+  if (!material) {
+    return res.status(404).json({ error: 'Material not found' });
+  }
+  
+  res.json({
+    id: material._id,
+    name: material.name,
+    availableCopies: material.availableCopies,
+    totalCopies: material.totalCopies,
+    status: material.status || (material.availableCopies > 0 ? 'available' : 'borrowed'),
+    canBorrow: material.availableCopies > 0,
+    canReserve: material.availableCopies > 0
+  });
+}));
 
 // User reserved materials endpoint
 router.get('/user/reserved', authenticateToken, asyncHandler(async (req, res) => {
