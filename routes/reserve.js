@@ -31,7 +31,7 @@ const NotificationService = {
   }
 };
 
-// POST - Create reservation (with enhanced features + validation)
+// In your reserve-requests.js route file
 router.post('/', async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -39,10 +39,17 @@ router.post('/', async (req, res) => {
   try {
     const { bookId, pickupDate, bookTitle, author, reservationDate, userId, userName } = req.body;
 
-    if (!bookId || !pickupDate || !bookTitle) {
+    // Add better validation with detailed error messages
+    const missingFields = [];
+    if (!bookId) missingFields.push('bookId');
+    if (!pickupDate) missingFields.push('pickupDate');
+    if (!bookTitle) missingFields.push('bookTitle');
+
+    if (missingFields.length > 0) {
       await session.abortTransaction();
       return res.status(400).json({
-        error: 'Missing required fields (bookId, pickupDate, bookTitle)'
+        error: `Missing required fields: ${missingFields.join(', ')}`,
+        details: req.body // Include received data for debugging
       });
     }
 
@@ -56,18 +63,7 @@ router.post('/', async (req, res) => {
       await session.abortTransaction();
       return res.status(400).json({ error: 'Reservation and pickup dates must be on weekdays.' });
     }
-
-    // ✅ Validation: library hours (9AM - 5PM)
-    if (
-      reservation.toDateString() === now.toDateString() &&
-      (now.getHours() < 9 || now.getHours() >= 17)
-    ) {
-      await session.abortTransaction();
-      return res.status(400).json({
-        error: 'Library is closed. Please select the next available pickup date.'
-      });
-    }
-
+    
     // 8. Better Data Population - Get user info if not provided
     let userInfo = {};
     if (!userName || !userId) {
