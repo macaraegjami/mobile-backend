@@ -154,31 +154,16 @@ class ChatService {
       return this.predefinedResponses[input];
     }
 
-    // Check partial matches
-    for (const [key, response] of Object.entries(this.predefinedResponses)) {
-      if (input.includes(key) && key.length > 3) { // Avoid matching very short words
-        return response;
+    // Check partial matches for basic greetings only
+    const basicGreetings = ['hello', 'hi', 'good morning', 'good afternoon', 'good evening'];
+    for (const greeting of basicGreetings) {
+      if (input === greeting || (input.startsWith(greeting) && input.length < 20)) {
+        return this.predefinedResponses[greeting] || this.predefinedResponses['hello'];
       }
     }
 
-    // Check for specific patterns
-    if (input.includes('how much') || input.includes('cost') || input.includes('price')) {
-      if (input.includes('membership') || input.includes('library')) {
-        return "CLAMS membership fees: AIMS students FREE, External researchers ₱500/day or ₱2,000/month, Alumni ₱1,000/year. Maritime industry professionals get special rates. Need specific membership details?";
-      }
-      if (input.includes('program') || input.includes('tuition') || input.includes('aims')) {
-        return "AIMS program tuition varies by course. Marine Engineering and Marine Transportation have different fees. Contact admissions at (02) 8831-9925 for current tuition rates and scholarships. Which program interests you?";
-      }
-      if (input.includes('artifact') || input.includes('museum')) {
-        return "Our Maritime Museum displays ship models and maritime artifacts. Museum tours are included with library membership or can be arranged separately. Educational group tours available by appointment. Want to schedule a visit?";
-      }
-    }
-
-    if (input.includes('borrow') || input.includes('checkout')) {
-      return "Borrowing privileges: AIMS students can borrow 5 books for 2 weeks, Faculty 10 books for 1 month. External members need day pass or monthly membership. Renewals allowed once if no holds. What specific maritime materials are you looking for?";
-    }
-
-    return null; // No quick response found
+    // For all other queries, return null to use AI
+    return null;
   }
 
   // NEW: Build enhanced prompt for AI

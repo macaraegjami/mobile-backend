@@ -140,70 +140,65 @@ SPECIAL COLLECTIONS:
       return "I notice you sent an empty message. What specific question about AIMS or CLAMS can I help you with?";
     }
 
-    // Quick response for very specific questions
+    // FIRST: Try specific answer for very common questions
     const quickAnswer = this.getSpecificAnswer(userInput);
     if (quickAnswer) {
+      console.log("✅ Using specific answer for:", userInput.substring(0, 50));
       return quickAnswer;
     }
 
-    // Try AI response with retries
-    let lastError;
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        console.log(`🔥 AI API attempt ${attempt}/2`);
-        
-        const response = await fetch(this.baseUrl, {
-          method: "POST",
-          headers: this.headers,
-          body: JSON.stringify({
-            model: "deepseek/deepseek-r1:free",
-            messages: [
-              {
-                role: "system", 
-                content: this.getSystemPrompt()
-              },
-              {
-                role: "user",
-                content: userInput
-              }
-            ],
-            temperature: 0.4,
-            max_tokens: 250,
-            stream: false
-          })
-        });
+    // SECOND: Try AI response with improved error handling
+    console.log("🤖 Sending to AI:", userInput.substring(0, 50));
+    
+    try {
+      const response = await fetch(this.baseUrl, {
+        method: "POST",
+        headers: this.headers,
+        body: JSON.stringify({
+          model: "deepseek/deepseek-r1:free",
+          messages: [
+            {
+              role: "system", 
+              content: this.getSystemPrompt()
+            },
+            {
+              role: "user",
+              content: userInput
+            }
+          ],
+          temperature: 0.3, // Lower for more consistent responses
+          max_tokens: 200,
+          stream: false
+        })
+      });
 
-        if (!response.ok) {
-          throw new Error(`API Error ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        if (data.choices?.[0]?.message?.content) {
-          const aiResponse = data.choices[0].message.content.trim();
-          
-          if (aiResponse.length < 20) {
-            throw new Error("Response too short");
-          }
-          
-          console.log(`✅ AI success on attempt ${attempt}`);
-          return this.cleanResponse(aiResponse, userInput);
-        }
-        
-        throw new Error("Invalid response format");
-        
-      } catch (error) {
-        lastError = error;
-        console.error(`Attempt ${attempt} failed:`, error.message);
-        
-        if (attempt < 2) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+      if (!response.ok) {
+        console.warn("API response not OK:", response.status);
+        throw new Error(`API Error ${response.status}`);
       }
-    }
 
-    console.error("🚫 AI failed, using fallback");
-    return this.generateAdvancedFallback(userInput);
+      const data = await response.json();
+      
+      if (data.choices?.[0]?.message?.content) {
+        const aiResponse = data.choices[0].message.content.trim();
+        
+        // Only reject if response is VERY short or clearly broken
+        if (aiResponse.length < 15) {
+          console.warn("AI response too short:", aiResponse);
+          throw new Error("Response too short");
+        }
+        
+        console.log("✅ AI response received:", aiResponse.substring(0, 100));
+        return this.cleanResponse(aiResponse, userInput);
+      }
+      
+      throw new Error("Invalid response format");
+      
+    } catch (error) {
+      console.error("🚫 AI failed:", error.message);
+      // ONLY use fallback if AI completely fails
+      return this.generateAdvancedFallback(userInput);
+    }
   }
 
   // NEW: Get specific answers for common questions
@@ -345,21 +340,21 @@ Need help finding specific maritime resources or setting up your borrowing accou
   }
 
   getSystemPrompt() {
-    return `You are De Malacca, the expert maritime assistant for AIMS-CLAMS. 
+    return `You are De Malacca, AIMS-CLAMS maritime assistant. Answer questions directly and specifically.
 
-CRITICAL INSTRUCTIONS:
-1. Give SPECIFIC, DIRECT answers to user questions
-2. Don't start with "I'm De Malacca" unless it's a greeting
-3. Use the knowledge base below to provide accurate information
-4. If you don't know something, say so and refer to staff
-5. Keep responses under 200 words but be helpful
-6. Use maritime terminology appropriately
-7. Always end with a relevant follow-up question
+STRICT RULES:
+1. Answer the user's EXACT question - don't give generic maritime introductions
+2. For cost questions: Give specific peso amounts and fee structures
+3. For hours questions: Give exact operating times
+4. For program questions: Give specific program details
+5. For museum questions: Mention specific exhibits and costs
+6. Keep responses under 150 words but be complete
+7. End with a relevant follow-up question
 
 KNOWLEDGE BASE:
 ${this.getCLAMSKnowledge()}
 
-Answer the user's question directly and specifically using this information.`;
+USER QUESTION BELOW - Answer it directly and specifically:`;
   }
 
   cleanResponse(response, userInput) {
