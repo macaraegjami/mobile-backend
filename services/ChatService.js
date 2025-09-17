@@ -68,81 +68,33 @@ class ChatService {
   }
 
   loadPredefinedResponses() {
-    // Only keep basic operational responses - all content queries go to AI
     return {
-      "system_error": "⚓ I'm experiencing technical difficulties. Please try again or contact CLAMS staff at (02) 8831-9925.",
-      "ai_unavailable": "🔧 My AI systems are temporarily down. Please contact CLAMS directly for immediate assistance!"
+      // Quick answers for common questions
+      "hello": "Ahoy! I'm De Malacca, your AIMS-CLAMS maritime assistant! How can I help you navigate maritime education today?",
+      "hi": "Fair winds! I'm De Malacca. Ready to chart your course through AIMS programs and CLAMS library services?",
+      "good morning": "Good morning! I'm De Malacca, named after the great navigator. What maritime knowledge can I help you discover today?",
+      
+      // Hours and contact
+      "hours": "CLAMS Library is open Monday-Friday 7AM-7PM, Saturday 8AM-5PM. Contact: (02) 8831-9925. What specific service do you need?",
+      "contact": "AIMS-CLAMS Contact: (02) 8831-9925 | info@aims.edu.ph | Located in Pasay City, Metro Manila. How can we assist you?",
+      "location": "AIMS is located in Pasay City, Metro Manila, Philippines. Near the airport and maritime industry hub. Need directions?",
+      
+      // Quick program info
+      "programs": "AIMS offers BS Marine Engineering, BS Marine Transportation, BS Customs Administration, and BS Maritime Business Management. Which program interests you?",
+      "marine engineering": "Our Marine Engineering program focuses on ship engine operations, marine machinery, and power systems with hands-on simulator training. Want admission details?",
+      "marine transportation": "Marine Transportation covers navigation, cargo operations, and vessel management with bridge simulator training. Interested in the curriculum?",
+      
+      // Membership quick answers
+      "membership": "AIMS students: FREE | External researchers: ₱500/day or ₱2,000/month | Alumni: ₱1,000/year. What type of membership do you need?",
+      "fees": "CLAMS membership: Students free, external researchers ₱500/day, alumni ₱1,000/year. AIMS tuition varies by program. Need specific cost details?",
+      
+      // System responses
+      "system_error": "I'm experiencing technical difficulties. Please try again or contact CLAMS staff at (02) 8831-9925.",
+      "ai_unavailable": "My AI systems are temporarily down. Please contact CLAMS directly for immediate assistance!"
     };
   }
 
-  // Enhanced AIMS-maritime related keyword detection
-  isLibraryRelated(userInput) {
-    const input = userInput.toLowerCase();
-    
-    const aimsMaritimeKeywords = [
-      'aims', 'asian institute maritime', 'clams', 'library', 'archives', 'museum',
-      'maritime', 'marine', 'ship', 'boat', 'vessel', 'navigation', 'seafarer',
-      'captain', 'engineer', 'officer', 'sailor', 'naval', 'nautical', 'ocean',
-      'sea', 'port', 'harbor', 'cargo', 'shipping', 'freight', 'imo', 'stcw',
-      'engineering', 'transportation', 'customs', 'business management',
-      'simulation', 'simulator', 'bridge', 'engine room',
-      'books', 'book', 'borrow', 'borrowing', 'lending', 'loan', 'checkout',
-      'study', 'research', 'reading', 'catalog', 'collection', 'database',
-      'digital', 'ebook', 'journal', 'article', 'reference', 'bibliography',
-      'member', 'membership', 'join', 'register', 'card', 'account',
-      'fee', 'cost', 'price', 'payment', 'discount', 'student', 'alumni',
-      'room', 'space', 'computer', 'wifi', 'internet', 'printer',
-      'carrel', 'desk', 'seat', 'chair', 'table', 'lab', 'laboratory',
-      'hours', 'schedule', 'open', 'close', 'holiday', 'weekend',
-      'overdue', 'fine', 'penalty', 'renewal', 'extend', 'due date',
-      'reservation', 'reserve', 'hold', 'request',
-      'librarian', 'staff', 'help', 'assistance', 'support', 'guide',
-      'tutorial', 'training', 'workshop', 'consultation', 'appointment',
-      'ship models', 'maritime artifacts', 'nautical', 'admiralty',
-      'maritime law', 'shipping law', 'maritime history', 'naval history',
-      'filipiniana', 'historical', 'archive', 'manuscript', 'document',
-      'online', 'website', 'portal', 'system', 'opac', 'search',
-      'download', 'access', 'login', 'password', 'remote', 'thesis'
-    ];
-    
-    const serviceKeywords = [
-      'how', 'what', 'where', 'when', 'why', 'can i', 'do you',
-      'information', 'details', 'policy', 'procedure', 'process',
-      'available', 'offer', 'provide', 'service', 'facility'
-    ];
-    
-    const educationalKeywords = ['student', 'study', 'homework', 'assignment', 'project', 'class', 'school', 'university', 'college', 'education', 'course', 'program', 'degree'];
-    
-    const hasAimsMaritimeKeywords = aimsMaritimeKeywords.some(keyword => input.includes(keyword));
-    const hasServiceKeywords = serviceKeywords.some(keyword => input.includes(keyword));
-    const hasEducationalContext = educationalKeywords.some(keyword => input.includes(keyword));
-    
-    return hasAimsMaritimeKeywords || (hasServiceKeywords && hasEducationalContext);
-  }
-
-  // NEW: Check for basic greetings only
-  isBasicGreeting(userInput) {
-    const input = userInput.toLowerCase().trim();
-    const basicGreetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening'];
-    
-    return basicGreetings.some(greeting => 
-      input === greeting || 
-      (input.length <= 15 && input.includes(greeting) && input.split(' ').length <= 3)
-    );
-  }
-
-  // NEW: Get basic greeting response
-  getBasicGreeting(userInput) {
-    const greetings = [
-      "⚓ Ahoy! I'm De Malacca, your AIMS-CLAMS maritime assistant! How can I help you navigate maritime education today?",
-      "🚢 Fair winds! I'm De Malacca. Ready to chart your course through AIMS programs and CLAMS library services?", 
-      "⚓ Hola! I'm De Malacca, named after the great navigator. What maritime knowledge can I help you discover today?"
-    ];
-    
-    return greetings[Math.floor(Math.random() * greetings.length)];
-  }
-
-  // NEW: AI-first response generation (predefined responses only for basic greetings)
+  // Enhanced response generation with better flow
   async generateResponse(userInput) {
     try {
       this.addToHistory('user', userInput);
@@ -153,7 +105,7 @@ class ChatService {
         return "Please enter a question or message for me to help you with!";
       }
 
-      // Check cache for exact matches
+      // Check cache first
       const cacheKey = this.generateCacheKey(userInput);
       if (this.responseCache.has(cacheKey)) {
         const cachedResponse = this.responseCache.get(cacheKey);
@@ -161,38 +113,202 @@ class ChatService {
         return cachedResponse;
       }
 
-      // Only use predefined responses for basic greetings
-      if (this.isBasicGreeting(userInput)) {
-        const greetingResponse = this.getBasicGreeting(userInput);
-        this.addToHistory('assistant', greetingResponse);
-        this.responseCache.set(cacheKey, greetingResponse);
+      // Check for quick predefined responses
+      const quickResponse = this.getQuickResponse(userInput);
+      if (quickResponse) {
+        this.addToHistory('assistant', quickResponse);
+        this.responseCache.set(cacheKey, quickResponse);
         await this.saveToStorage();
-        return greetingResponse;
+        return quickResponse;
       }
 
-      // Always use AI for ALL other queries
-      const aimsClamsContext = `You are De Mallaca, an advanced AI-powered chatbot for the Asian Institute of Maritime Studies (AIMS) and its CLAMS facility (Center of Library, Archives, and Museum Services). AIMS is a leading maritime education institution in the Philippines, and CLAMS is its library, archives, and museum, responsible for book lending, record keeping, museum artifacts, and room reservations. If users ask about AIMS, clarify it is the institution; if they ask about CLAMS, clarify it is the library, archives, and museum facility at AIMS. You are friendly, polite, and always provide helpful, user-friendly, and complete answers to any question, whether about AIMS, CLAMS, maritime topics, or general knowledge. If a question is not related to AIMS/CLAMS, answer it as best as you can, but gently remind the user of your expertise in maritime education and CLAMS services. Always be professional, positive, and helpful, and handle FAQs with clear, concise, and accurate information. If you don't know the answer, say so politely and offer to help with something else.`;
+      // Build better context for AI
+      const enhancedPrompt = this.buildEnhancedPrompt(userInput);
 
-      const prompt = `${aimsClamsContext}\n\nUser: ${userInput}`;
-
-      // Send to DeepSeekService
-      const response = await DeepSeekService.generateResponse(prompt);
+      // Send to AI service with better error handling
+      const response = await DeepSeekService.generateResponse(enhancedPrompt);
       if (!response || response.trim().length === 0) {
-        return this.generateEmergencyFallback(userInput, null);
+        return this.generateContextualFallback(userInput);
       }
       
-      this.addToHistory('assistant', response);
-      this.responseCache.set(cacheKey, response);
+      // Clean up AI response if it's too generic
+      const cleanedResponse = this.cleanAIResponse(response, userInput);
+      
+      this.addToHistory('assistant', cleanedResponse);
+      this.responseCache.set(cacheKey, cleanedResponse);
       await this.saveToStorage();
       
-      return response;
+      return cleanedResponse;
     } catch (error) {
-      // Fallbacks only if AI is unavailable
-      if (error.message && (error.message.includes("API key missing") || error.message.includes("not configured"))) {
-        return await DeepSeekService.generateAdvancedFallback(userInput);
-      }
-      return this.generateAIUnavailableFallback(userInput);
+      console.error("ChatService error:", error);
+      return this.generateContextualFallback(userInput);
     }
+  }
+
+  // NEW: Quick response checker for common queries
+  getQuickResponse(userInput) {
+    const input = userInput.toLowerCase().trim();
+    
+    // Check exact matches first
+    if (this.predefinedResponses[input]) {
+      return this.predefinedResponses[input];
+    }
+
+    // Check partial matches
+    for (const [key, response] of Object.entries(this.predefinedResponses)) {
+      if (input.includes(key) && key.length > 3) { // Avoid matching very short words
+        return response;
+      }
+    }
+
+    // Check for specific patterns
+    if (input.includes('how much') || input.includes('cost') || input.includes('price')) {
+      if (input.includes('membership') || input.includes('library')) {
+        return "CLAMS membership fees: AIMS students FREE, External researchers ₱500/day or ₱2,000/month, Alumni ₱1,000/year. Maritime industry professionals get special rates. Need specific membership details?";
+      }
+      if (input.includes('program') || input.includes('tuition') || input.includes('aims')) {
+        return "AIMS program tuition varies by course. Marine Engineering and Marine Transportation have different fees. Contact admissions at (02) 8831-9925 for current tuition rates and scholarships. Which program interests you?";
+      }
+      if (input.includes('artifact') || input.includes('museum')) {
+        return "Our Maritime Museum displays ship models and maritime artifacts. Museum tours are included with library membership or can be arranged separately. Educational group tours available by appointment. Want to schedule a visit?";
+      }
+    }
+
+    if (input.includes('borrow') || input.includes('checkout')) {
+      return "Borrowing privileges: AIMS students can borrow 5 books for 2 weeks, Faculty 10 books for 1 month. External members need day pass or monthly membership. Renewals allowed once if no holds. What specific maritime materials are you looking for?";
+    }
+
+    return null; // No quick response found
+  }
+
+  // NEW: Build enhanced prompt for AI
+  buildEnhancedPrompt(userInput) {
+    // Get recent conversation context (last 2 exchanges)
+    const recentContext = this.getRecentContext();
+    
+    // Detect query type for better AI prompting
+    const queryType = this.detectQueryType(userInput);
+    
+    const basePrompt = `You are De Malacca, AIMS-CLAMS maritime assistant. Answer the user's specific question directly and helpfully.
+
+IMPORTANT INSTRUCTIONS:
+- Give a DIRECT, SPECIFIC answer to the user's exact question
+- Do NOT start with generic introductions like "I'm De Malacca" unless it's a greeting
+- Be concise but helpful (under 150 words)
+- Use maritime terminology when appropriate
+- If you don't know specific details, say so and offer to connect them with staff
+
+CONTEXT: ${recentContext}
+
+QUERY TYPE: ${queryType}
+
+AIMS-CLAMS INFO:
+- Location: Pasay City, Metro Manila
+- Contact: (02) 8831-9925 | info@aims.edu.ph  
+- Library Hours: Mon-Fri 7AM-7PM, Sat 8AM-5PM
+- Programs: Marine Engineering, Marine Transportation, Customs Admin, Maritime Business
+- Facilities: Ship simulators, 25K+ maritime books, IMO publications
+- Membership: Students free, researchers ₱500/day, alumni ₱1,000/year
+
+USER QUESTION: ${userInput}`;
+
+    return basePrompt;
+  }
+
+  // NEW: Detect what type of query this is
+  detectQueryType(userInput) {
+    const input = userInput.toLowerCase();
+    
+    if (input.includes('how much') || input.includes('cost') || input.includes('fee') || input.includes('price')) {
+      return "PRICING_QUESTION - Give specific costs and fees";
+    }
+    if (input.includes('hour') || input.includes('open') || input.includes('close') || input.includes('schedule')) {
+      return "HOURS_QUESTION - Give operating hours";
+    }
+    if (input.includes('borrow') || input.includes('checkout') || input.includes('loan')) {
+      return "BORROWING_QUESTION - Give borrowing policies";
+    }
+    if (input.includes('program') || input.includes('course') || input.includes('admission')) {
+      return "ACADEMIC_QUESTION - Give program information";
+    }
+    if (input.includes('membership') || input.includes('join') || input.includes('register')) {
+      return "MEMBERSHIP_QUESTION - Give membership details";
+    }
+    if (input.includes('museum') || input.includes('artifact') || input.includes('exhibition')) {
+      return "MUSEUM_QUESTION - Give museum information";
+    }
+    if (input.includes('archive') || input.includes('historical') || input.includes('document')) {
+      return "ARCHIVES_QUESTION - Give archives information";
+    }
+    
+    return "GENERAL_QUESTION - Answer helpfully and specifically";
+  }
+
+  // NEW: Get recent conversation context
+  getRecentContext() {
+    if (this.conversationHistory.length <= 2) {
+      return "This is a new conversation.";
+    }
+    
+    const recent = this.conversationHistory.slice(-4); // Last 2 exchanges
+    return recent.map(h => `${h.role}: ${h.content.substring(0, 100)}`).join('\n');
+  }
+
+  // NEW: Clean AI response to avoid generic repetitive answers
+  cleanAIResponse(response, userInput) {
+    let cleaned = response.trim();
+    
+    // If response is too generic or repetitive, make it more specific
+    if (cleaned.toLowerCase().includes("i'm de malacca") && !this.isGreeting(userInput)) {
+      // Remove generic introductions from non-greeting responses
+      cleaned = cleaned.replace(/^.*?I'm De Malacca[^.]*\.?\s*/i, '');
+      cleaned = cleaned.replace(/^.*?Ahoy[^.]*\.?\s*/i, '');
+    }
+    
+    // If response is still too short or generic, add context
+    if (cleaned.length < 50 && !this.isSimpleQuery(userInput)) {
+      cleaned += " Would you like more specific details about this topic?";
+    }
+    
+    return cleaned || "I'd be happy to help you with that. Could you provide a bit more detail about what specific information you're looking for?";
+  }
+
+  // NEW: Check if user input is a greeting
+  isGreeting(userInput) {
+    const greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'hola'];
+    const input = userInput.toLowerCase().trim();
+    return greetings.some(greeting => input === greeting || input.startsWith(greeting + ' '));
+  }
+
+  // NEW: Check if query is simple (yes/no or short answer)
+  isSimpleQuery(userInput) {
+    const simpleWords = ['yes', 'no', 'okay', 'thanks', 'thank you'];
+    return simpleWords.includes(userInput.toLowerCase().trim());
+  }
+
+  // IMPROVED: Better contextual fallback
+  generateContextualFallback(userInput) {
+    const input = userInput.toLowerCase();
+    
+    // Specific fallbacks based on query content
+    if (input.includes('cost') || input.includes('fee') || input.includes('price') || input.includes('how much')) {
+      return "Here are our current fees: AIMS students get free library access. External researchers pay ₱500/day or ₱2,000/month. Alumni membership is ₱1,000/year. For AIMS program tuition, please contact admissions at (02) 8831-9925. What specific costs did you want to know about?";
+    }
+    
+    if (input.includes('artifact') || input.includes('museum') || input.includes('display')) {
+      return "Our Maritime Museum features historic ship models, maritime artifacts, and Philippine naval history exhibits. Admission is included with library membership. We offer educational tours for groups by appointment. Would you like to schedule a museum visit?";
+    }
+    
+    if (input.includes('hour') || input.includes('open') || input.includes('schedule')) {
+      return "CLAMS Library hours: Monday-Friday 7:00 AM - 7:00 PM, Saturday 8:00 AM - 5:00 PM. Archives and Museum access by appointment. Contact us at (02) 8831-9925 to schedule visits. What specific service do you need?";
+    }
+    
+    if (input.includes('program') || input.includes('course') || input.includes('marine')) {
+      return "AIMS offers these maritime programs: BS Marine Engineering (ship engines & machinery), BS Marine Transportation (navigation & operations), BS Customs Administration, and BS Maritime Business Management. All programs include hands-on training with ship simulators. Which program interests you most?";
+    }
+    
+    // Default fallback
+    return "I can help you with AIMS maritime programs, CLAMS library services, membership information, borrowing policies, archives access, and museum tours. Contact us directly at (02) 8831-9925 or info@aims.edu.ph for immediate assistance. What specific information do you need?";
   }
 
   generateCacheKey(userInput) {
@@ -202,40 +318,9 @@ class ChatService {
       .trim();
   }
 
-  buildOptimizedPrompt(userInput, intent) {
-    let contextualInfo = "";
-    
-    if (this.conversationHistory.length > 2) {
-      const recentHistory = this.conversationHistory.slice(-2);
-      const historyText = recentHistory.map(h => `${h.role}: ${h.content.substring(0, 50)}`).join('\n');
-      contextualInfo += `\nRecent: ${historyText}\n`;
-    }
-    
-    const intentContext = this.getIntentContext(intent);
-    
-    return `${contextualInfo}\n${intentContext}\n\nUser: ${userInput}`;
-  }
-
-  getIntentContext(intent) {
-    const contexts = {
-      'aims_programs': "Help with AIMS maritime program information and admissions.",
-      'ship_simulation': "Provide info about AIMS ship simulation facilities and training.",
-      'find_book': "Help with maritime book search and library catalog.",
-      'research_help': "Provide maritime research assistance and database help.",
-      'membership': "Explain AIMS-CLAMS membership process and benefits.",
-      'study_space': "Info about AIMS study rooms and maritime library facilities.",
-      'hours_location': "Give AIMS-CLAMS operating hours and location info.",
-      'digital_access': "Help with digital maritime resources and databases.",
-      'maritime_law': "Assist with maritime law resources and IMO publications.",
-      'careers': "Provide maritime career guidance and industry information."
-    };
-    
-    return contexts[intent] || "General AIMS-CLAMS maritime assistance.";
-  }
-
   cleanCacheIfNeeded() {
     const now = Date.now();
-    if (now - this.lastCacheClean > 300000) {
+    if (now - this.lastCacheClean > 300000) { // 5 minutes
       if (this.responseCache.size > 25) {
         const entries = Array.from(this.responseCache.entries());
         this.responseCache.clear();
@@ -247,115 +332,21 @@ class ChatService {
     }
   }
 
-  detectUserIntent(userInput) {
-    const input = userInput.toLowerCase();
-    
-    const intents = {
-      'aims_programs': ['aims program', 'maritime program', 'marine engineering', 'marine transportation', 'customs administration', 'maritime business', 'admission', 'apply'],
-      'ship_simulation': ['simulator', 'simulation', 'bridge simulator', 'engine room simulator', 'training vessel', 'aims explorer'],
-      'find_book': ['find', 'search', 'looking for', 'need', 'book about', 'maritime book'],
-      'borrow_info': ['borrow', 'checkout', 'loan', 'take out', 'lending'],
-      'membership': ['join', 'member', 'registration', 'sign up', 'membership'],
-      'hours_location': ['hours', 'open', 'close', 'time', 'location', 'address', 'where is aims'],
-      'study_space': ['study', 'room', 'space', 'reserve', 'quiet', 'library area'],
-      'research_help': ['research', 'thesis', 'help', 'assistance', 'citation', 'maritime research'],
-      'digital_access': ['digital', 'online', 'ebook', 'database', 'remote', 'imo', 'stcw'],
-      'fees_fines': ['fee', 'cost', 'fine', 'overdue', 'penalty', 'price', 'tuition'],
-      'archives': ['archives', 'historical', 'manuscript', 'documents', 'maritime history', 'ship documentation'],
-      'museum': ['museum', 'exhibition', 'exhibit', 'tour', 'display', 'ship models', 'artifacts'],
-      'maritime_law': ['maritime law', 'shipping law', 'imo publications', 'maritime regulations'],
-      'careers': ['career', 'job', 'employment', 'seafarer', 'officer', 'captain', 'engineer jobs']
-    };
-    
-    for (const [intent, keywords] of Object.entries(intents)) {
-      if (keywords.some(keyword => input.includes(keyword))) {
-        return intent;
-      }
-    }
-    
-    return 'general_inquiry';
-  }
-
-  handleNonLibraryQuery(userInput) {
-    const restrictionMessage = "Ahoy! I'm De Malacca, your dedicated AIMS-CLAMS maritime assistant! ⚓📚 I specialize in helping with AIMS maritime programs, CLAMS library services, ship simulation facilities, maritime research assistance, archives access, and all things related to our maritime Library, Archives, and Museum. What maritime knowledge can I help you navigate today? Ready to set sail on your learning adventure? 🌊";
-    this.addToHistory('assistant', restrictionMessage);
-    return restrictionMessage;
-  }
-
-  generateAIUnavailableFallback(userInput) {
-    return `⚓ Ahoy! I'm experiencing some technical difficulties connecting to my AI knowledge base right now. 🔧 
-
-However, I can still help you with basic AIMS-CLAMS information:
-
-📞 **Contact CLAMS directly:** (02) 8831-9925 | info@aims.edu.ph
-⏰ **Library Hours:** Mon-Fri 7AM-7PM, Sat 8AM-5PM  
-📍 **Location:** AIMS Campus, Pasay City, Metro Manila
-🎓 **Programs:** Marine Engineering, Marine Transportation, Maritime Business
-📚 **Services:** Library, Archives, Museum, Ship Simulation
-
-Please try your question again in a moment, or contact our staff directly for immediate assistance! Fair winds! 🌊`;
-  }
-
-  generateEmergencyFallback(userInput, intent) {
-    const input = userInput.toLowerCase();
-    
-    const emergencyResponses = {
-      'aims_programs': "⚓ I can help with AIMS maritime programs! We offer BS Marine Engineering, BS Marine Transportation, BS Customs Administration, and BS Maritime Business Management. Which program interests you most?",
-      'ship_simulation': "🚢 AIMS has excellent ship simulation facilities including bridge simulators and engine room simulators for hands-on maritime training! Would you like to know more about our training programs?",
-      'find_book': "📚 I can help you find maritime books in our CLAMS library! We have 25,000+ specialized maritime volumes. What specific maritime topic are you researching?",
-      'research_help': "🔍 I'm here to assist with your maritime research! CLAMS offers thesis support, maritime databases, and IMO publications. What research topic can I help you with?",
-      'membership': "👥 I can help you join CLAMS! Students get free access with AIMS ID, external researchers pay ₱500/day or ₱2,000/month. What type of membership do you need?",
-      'hours_location': "⏰ CLAMS Library hours: Mon-Fri 7AM-7PM, Sat 8AM-5PM. Located at AIMS Campus, Pasay City. Contact: (02) 8831-9925. What specific information do you need?",
-      'study_space': "📖 CLAMS has maritime study areas, computer labs, and group study rooms available! Would you like to know about reserving study spaces?",
-      'digital_access': "💻 We offer digital maritime resources including IMO publications, STCW standards, and maritime databases! What digital resources are you looking for?",
-      'maritime_law': "⚖️ CLAMS has extensive maritime law resources including IMO conventions and shipping regulations! What specific maritime law topic interests you?",
-      'archives': "📜 Our archives contain Philippine maritime history and ship documentation! What historical maritime information are you seeking?",
-      'museum': "🏛️ Our maritime museum features ship models and naval artifacts! Would you like to know about tours or current exhibitions?"
-    };
-    
-    const fallbackResponse = emergencyResponses[intent];
-    if (fallbackResponse) {
-      return fallbackResponse;
-    }
-    
-    if (input.includes('hour') || input.includes('open') || input.includes('time')) {
-      return "⏰ AIMS-CLAMS Library is open Mon-Fri 7AM-7PM, Sat 8AM-5PM. Contact us at (02) 8831-9925 for more information!";
-    }
-    
-    if (input.includes('cost') || input.includes('fee') || input.includes('price')) {
-      return "💰 AIMS students get free library access! External researchers: ₱500/day or ₱2,000/month. Alumni: ₱1,000/year. What membership type do you need?";
-    }
-    
-    if (input.includes('borrow') || input.includes('book')) {
-      return "📖 You can borrow maritime books with AIMS student ID or CLAMS membership. Students: 5 books for 2 weeks. Need help finding specific books?";
-    }
-    
-    return `⚓ I'm here to help with AIMS maritime education and CLAMS library services! While I'm having some technical difficulties with my detailed responses, I can still assist you with:
-
-🎓 **AIMS Programs** - Marine Engineering, Marine Transportation, Maritime Business
-📚 **Library Services** - Maritime books, databases, study spaces  
-🔍 **Research Help** - Maritime thesis support, IMO publications
-👥 **Membership** - Student, alumni, and researcher access
-📞 **Contact** - (02) 8831-9925 | info@aims.edu.ph
-
-What specific maritime topic can I help you with today? 🌊`;
-  }
-
   updateConversationContext(userInput) {
     const keywords = userInput.toLowerCase().split(/\s+/);
     
-    if (keywords.includes('book') || keywords.includes('search')) {
-      this.currentTopic = 'book_search';
-    } else if (keywords.includes('membership') || keywords.includes('join')) {
+    if (keywords.some(k => ['book', 'search', 'find', 'library'].includes(k))) {
+      this.currentTopic = 'library_search';
+    } else if (keywords.some(k => ['membership', 'join', 'register'].includes(k))) {
       this.currentTopic = 'membership';
-    } else if (keywords.includes('hours') || keywords.includes('open')) {
+    } else if (keywords.some(k => ['hours', 'open', 'schedule'].includes(k))) {
       this.currentTopic = 'hours_info';
-    } else if (keywords.includes('study') || keywords.includes('room')) {
-      this.currentTopic = 'study_space';
-    } else if (keywords.includes('research') || keywords.includes('thesis')) {
-      this.currentTopic = 'research_help';
+    } else if (keywords.some(k => ['program', 'course', 'admission'].includes(k))) {
+      this.currentTopic = 'academic_programs';
+    } else if (keywords.some(k => ['museum', 'artifact', 'exhibition'].includes(k))) {
+      this.currentTopic = 'museum';
     } else {
-      this.currentTopic = null;
+      this.currentTopic = 'general';
     }
   }
 
@@ -366,6 +357,7 @@ What specific maritime topic can I help you with today? 🌊`;
       timestamp: new Date().toISOString()
     });
     
+    // Keep last 50 messages
     if (this.conversationHistory.length > 50) {
       this.conversationHistory = this.conversationHistory.slice(-40);
     }
