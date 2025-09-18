@@ -4,53 +4,23 @@ import LearningMaterial from '../models/LearningMaterials.js';
 
 async function updateMaterialStatuses() {
   try {
-    // Get all materials that have active transactions
-    const activeMaterials = await BorrowRequest.aggregate([
-      {
-        $match: {
-          status: { $in: ['pending', 'borrowed', 'overdue'] }
-        }
-      },
-      {
-        $group: {
-          _id: '$materialId',
-          statuses: { $addToSet: '$status' }
-        }
-      }
-    ]);
-
-    // Create bulk operations
-    const bulkOps = activeMaterials.map(material => {
-      let status = 'available';
-      if (material.statuses.includes('borrowed') || material.statuses.includes('overdue')) {
-        status = 'borrowed';
-      } else if (material.statuses.includes('pending')) {
-        status = 'pending';
-      }
-
-      return {
-        updateOne: {
-          filter: { _id: material._id },
-          update: { $set: { status } }
-        }
-      };
+    // Find all borrow requests that should affect material status
+    const activeRequests = await BorrowRequest.find({
+      status: { $in: ['pending', 'borrowed', 'overdue'] }
     });
 
-    // Update all affected materials
-    if (bulkOps.length > 0) {
-      await LearningMaterial.bulkWrite(bulkOps);
+    // First reset all materials to available
+    await LearningMaterial.updateMany({}, { status: 'available' });
+
+    // Then update based on active requests
+    for (const request of activeRequests) {
+      await LearningMaterial.findByIdAndUpdate(
+        request.materialId,
+        { status: request.status === 'pending' ? 'pending' : 'borrowed' }
+      );
     }
-
-    // Reset status for materials with no active transactions
-    await LearningMaterial.updateMany(
-      { _id: { $nin: activeMaterials.map(m => m._id) } },
-      { $set: { status: 'available' } }
-    );
-
-    console.log(`Updated status for ${activeMaterials.length} materials`);
   } catch (error) {
     console.error('Error syncing material statuses:', error);
-    throw error;
   }
 }
 
