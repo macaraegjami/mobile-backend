@@ -20,6 +20,7 @@ const asyncHandler = fn => (req, res, next) => {
 // Combined and improved single GET endpoint for materials
 router.get('/', async (req, res) => {
   try {
+    
     // Debug log the query parameters
     console.log('Query params:', req.query);
 
@@ -60,6 +61,7 @@ router.get('/', async (req, res) => {
 
     // Debug log the number of results
     console.log(`Found ${materials.length} materials matching filter`);
+    
 
     // Format the response to match what frontend expects
     const formattedMaterials = materials.map(material => ({
@@ -68,7 +70,7 @@ router.get('/', async (req, res) => {
       author: material.author,
       description: material.description,
       imageUrl: material.imageUrl || 'https://via.placeholder.com/150x200?text=No+Cover',
-      status: material.status,
+      status: material.availableCopies > 0 ? 'available' : 'unavailable',
       availableCopies: material.availableCopies,
       totalCopies: material.totalCopies,
       typeofmat: material.typeofmat,
@@ -81,6 +83,8 @@ router.get('/', async (req, res) => {
       isbn: material.isbn,
       issn: material.issn,
     }));
+
+
 
     res.json({
       success: true,
