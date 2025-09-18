@@ -100,19 +100,40 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET a specific learning material by ID
+// GET a specific learning material by ID with consistent status formatting
 router.get('/:id', async (req, res) => {
   try {
-    const material = await LearningMaterial.findById(req.params.id);
+    const material = await LearningMaterial.findById(req.params.id).lean();
     if (!material) {
       return res.status(404).json({ message: 'Learning material not found' });
     }
 
-    res.json(material);
+    // Format same as list
+    const formattedMaterial = {
+      _id: material._id,
+      name: material.name,
+      author: material.author,
+      description: material.description,
+      imageUrl: material.imageUrl || 'https://via.placeholder.com/150x200?text=No+Cover',
+      status: material.availableCopies > 0 ? 'available' : 'unavailable',
+      availableCopies: material.availableCopies,
+      totalCopies: material.totalCopies,
+      typeofmat: material.typeofmat,
+      createdAt: material.createdAt,
+      accessionNumber: material.accessionNumber,
+      edition: material.edition,
+      yearofpub: material.yearofpub,
+      isbn: material.isbn,
+      issn: material.issn,
+    };
+
+    res.json({ success: true, data: formattedMaterial });
   } catch (error) {
+    console.error('Error fetching material:', error);
     res.status(500).json({ message: error.message });
   }
 });
+
 
 router.get('/:id/status', async (req, res) => {
   try {
