@@ -1,10 +1,11 @@
 // src/services/DeepSeekService.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, Platform } from 'react-native';
+import { API_KEYS } from '../config/api.js';
 
 class DeepSeekService {
   constructor() {
-    this.apiKey = process.env.REACT_APP_OPENROUTER_API_KEY;
+    this.apiKey = API_KEYS.OPENROUTER;
     this.baseUrl = "https://openrouter.ai/api/v1/chat/completions";
     this.headers = {
       "Content-Type": "application/json",
