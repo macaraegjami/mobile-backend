@@ -1,4 +1,3 @@
-
 import { Router } from 'express';
 import LearningMaterial from '../models/LearningMaterials.js';
 import User from '../models/User.js';
@@ -6,6 +5,7 @@ import authenticateToken from '../middleware/auth.js';
 import BorrowRequest from '../models/BorrowRequest.js';
 import ReserveRequest from '../models/ReserveRequest.js';
 import BookRating from '../models/BookRating.js';
+import mongoose from 'mongoose'; // Make sure to import mongoose
 
 const router = Router();
 
@@ -356,19 +356,32 @@ router.post('/:id/return', authenticateToken, asyncHandler(async (req, res) => {
   }
 }));
 
-// In your learningmat.js routes file, replace the existing rating route with this:
-// Add this route to check if user has already rated a specific transaction
+// FIXED: Check if user has already rated a specific transaction
+// This route should be: GET /api/learningmat/:id/rating/check/:transactionId
 router.get('/:id/rating/check/:transactionId', authenticateToken, asyncHandler(async (req, res) => {
   try {
     const bookId = req.params.id;
     const transactionId = req.params.transactionId;
     const userId = req.user._id;
 
+    console.log('Checking rating for:', { bookId, transactionId, userId });
+
+    // Validate ObjectId formats
+    if (!mongoose.Types.ObjectId.isValid(bookId) || 
+        !mongoose.Types.ObjectId.isValid(transactionId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid ID format'
+      });
+    }
+
     const existingRating = await BookRating.findOne({
-      userId,
-      bookId,
-      transactionId
+      userId: userId,
+      bookId: bookId,
+      transactionId: transactionId
     });
+
+    console.log('Existing rating found:', existingRating);
 
     res.json({
       success: true,
@@ -385,7 +398,7 @@ router.get('/:id/rating/check/:transactionId', authenticateToken, asyncHandler(a
   }
 }));
 
-// Improved rating submission endpoint
+// FIXED: Improved rating submission endpoint
 router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
   try {
     const { rating, review, transactionId, materialTitle, author } = req.body;
@@ -423,7 +436,7 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
     // Check if the borrow transaction exists and is returned
     const borrow = await BorrowRequest.findOne({
       _id: transactionId,
-      userId,
+      userId: userId,
       materialId: bookId,
       status: 'returned'
     });
@@ -435,50 +448,42 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
       });
     }
 
+    // Check if already rated
+    const existingRating = await BookRating.findOne({
+      userId: userId,
+      bookId: bookId,
+      transactionId: transactionId
+    });
+
+    if (existingRating) {
+      return res.status(400).json({
+        success: false,
+        message: 'You have already rated this transaction'
+      });
+    }
+
     // Prepare rating data
     const ratingData = {
-      userId,
-      bookId,
-      transactionId,
+      userId: userId,
+      bookId: bookId,
+      transactionId: transactionId,
       rating: parseInt(rating),
       review: review ? review.trim() : '',
       materialTitle: materialTitle || material.name,
       author: author || material.author
     };
 
-    // Use the safe creation method
-    let newRating;
-    try {
-      newRating = await BookRating.createSafeRating(ratingData);
-    } catch (createError) {
-      console.error('Rating creation error:', createError);
-      
-      if (createError.message.includes('already rated')) {
-        return res.status(400).json({
-          success: false,
-          message: createError.message
-        });
-      }
-      
-      // For any other error, return generic message
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to submit rating. Please try again.',
-        error: createError.message
-      });
-    }
+    // Create the rating
+    const newRating = await BookRating.create(ratingData);
 
     console.log('New rating created:', newRating);
 
-    // Update the borrow record to mark as rated (if you have this field)
+    // Update the borrow record to mark as rated
     try {
-      if (borrow.isRated !== undefined) {
-        borrow.isRated = true;
-        await borrow.save();
-      }
+      borrow.isRated = true;
+      await borrow.save();
     } catch (borrowUpdateError) {
       console.warn('Could not update borrow record isRated field:', borrowUpdateError.message);
-      // Don't fail the request if this fails
     }
 
     // Update material's average rating
@@ -494,7 +499,6 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
       }
     } catch (updateError) {
       console.warn('Could not update material average rating:', updateError.message);
-      // Don't fail the request if this fails
     }
 
     res.status(201).json({
@@ -519,21 +523,32 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
 }));
 
 // Get all ratings for a material
-router.get('/:id/ratings', authenticateToken, asyncHandler(async (req, res) => {
+router.get('/:id/ratings', asyncHandler(async (req, res) => {
   try {
     const bookId = req.params.id;
 
+    if (!mongoose.Types.ObjectId.isValid(bookId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid book ID format'
+      });
+    }
+
     const ratings = await BookRating.find({ 
-      bookId
+      bookId: bookId
     }).populate('userId', 'firstName lastName').sort({ createdAt: -1 });
+
+    const averageRating = ratings.length > 0 
+      ? parseFloat((ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length).toFixed(1))
+      : 0;
 
     res.json({
       success: true,
-      ratings: ratings,
-      totalRatings: ratings.length,
-      averageRating: ratings.length > 0 
-        ? parseFloat((ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length).toFixed(1))
-        : 0
+      data: {
+        ratings: ratings,
+        totalRatings: ratings.length,
+        averageRating: averageRating
+      }
     });
   } catch (error) {
     console.error('Error fetching ratings:', error);
