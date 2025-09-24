@@ -23,7 +23,6 @@ import archiveRequestRoutes from './routes/archiveRequest.js';
 import roomReservationRoutes from './routes/roomReservation.js';
 import reserveRoutes from './routes/reserve.js';
 import borrowRoutes from './routes/borrow.js';
-import bookRatingRoutes from './routes/bookrating.js'
 import userRoutes from './routes/users.js'
 import notificationRoutes from './routes/notifications.js'; // Adjust path as needed
 import attendanceRoutes from './routes/attendance.js'
@@ -106,7 +105,6 @@ app.use('/api/archive-requests', archiveRequestRoutes);
 app.use('/api/room-reservations', roomReservationRoutes);
 app.use('/api/reserve-requests', reserveRoutes);
 app.use('/api/borrow-requests', borrowRoutes);
-app.use('/api/ratings', bookRatingRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/attendance', attendanceRoutes);
