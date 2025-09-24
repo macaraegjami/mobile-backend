@@ -20,7 +20,7 @@ const asyncHandler = fn => (req, res, next) => {
 // Combined and improved single GET endpoint for materials
 router.get('/', async (req, res) => {
   try {
-    
+
     // Debug log the query parameters
     console.log('Query params:', req.query);
 
@@ -61,7 +61,7 @@ router.get('/', async (req, res) => {
 
     // Debug log the number of results
     console.log(`Found ${materials.length} materials matching filter`);
-    
+
 
     // Format the response to match what frontend expects
     const formattedMaterials = materials.map(material => ({
@@ -358,9 +358,9 @@ router.post('/:id/return', authenticateToken, asyncHandler(async (req, res) => {
 
 router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
   try {
-    const { rating, review, borrowId } = req.body;
+    const { rating, review, transactionId } = req.body; // Changed from borrowId to transactionId
     const userId = req.user._id;
-    const materialId = req.params.id;
+    const bookId = req.params.id; // Changed from materialId to bookId
 
     // Validate input
     if (!rating || rating < 1 || rating > 5) {
@@ -371,7 +371,7 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
     }
 
     // Check if the material exists
-    const material = await LearningMaterial.findById(materialId);
+    const material = await LearningMaterial.findById(bookId); // Changed variable name
     if (!material) {
       return res.status(404).json({
         success: false,
@@ -381,9 +381,9 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
 
     // Check if the borrow transaction exists and is returned
     const borrow = await BorrowRequest.findOne({
-      _id: borrowId,
+      _id: transactionId, // Changed from borrowId to transactionId
       userId,
-      materialId,
+      materialId: bookId, // This should match your BorrowRequest schema field name
       status: 'returned'
     });
 
@@ -397,8 +397,8 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
     // Check if user has already rated this material for this transaction
     const existingRating = await BookRating.findOne({
       userId,
-      materialId,
-      borrowId
+      bookId, // Changed from materialId to bookId
+      transactionId // Changed from borrowId to transactionId
     });
 
     if (existingRating) {
@@ -408,11 +408,11 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
       });
     }
 
-    // Create new rating
+    // Create new rating with correct field names
     const newRating = await BookRating.create({
       userId,
-      materialId,
-      borrowId,
+      bookId, // Changed from materialId to bookId
+      transactionId, // Changed from borrowId to transactionId
       rating,
       review,
       materialTitle: material.name,
@@ -424,7 +424,7 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
     await borrow.save();
 
     // Update material's average rating
-    const ratings = await BookRating.find({ materialId });
+    const ratings = await BookRating.find({ bookId: bookId }); // Changed field name
     const averageRating = ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length;
     material.averageRating = parseFloat(averageRating.toFixed(1));
     await material.save();

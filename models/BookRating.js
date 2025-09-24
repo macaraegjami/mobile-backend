@@ -13,7 +13,7 @@ const bookRatingSchema = new mongoose.Schema({
   },
   transactionId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Transaction',
+    ref: 'BorrowRequest', // Changed from 'Transaction' to 'BorrowRequest'
     required: true
   },
   rating: {
