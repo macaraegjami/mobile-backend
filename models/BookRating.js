@@ -40,13 +40,47 @@ const bookRatingSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Create a compound unique index to prevent duplicate ratings for the same transaction
-bookRatingSchema.index({
-  userId: 1,
-  transactionId: 1
-}, {
-  unique: true
+// Create a unique index with partial filter to handle null values
+bookRatingSchema.index(
+  { userId: 1, transactionId: 1 }, 
+  { 
+    unique: true,
+    name: 'userId_1_transactionId_1',
+    partialFilterExpression: { 
+      transactionId: { $ne: null, $exists: true } 
+    }
+  }
+);
+
+// Add a pre-save hook to validate transactionId
+bookRatingSchema.pre('save', function(next) {
+  if (!this.transactionId) {
+    return next(new Error('transactionId is required and cannot be null'));
+  }
+  next();
 });
+
+// Static method to safely create rating with duplicate check
+bookRatingSchema.statics.createSafeRating = async function(ratingData) {
+  try {
+    // Double-check for existing rating before creation
+    const existing = await this.findOne({
+      userId: ratingData.userId,
+      transactionId: ratingData.transactionId
+    });
+    
+    if (existing) {
+      throw new Error('DUPLICATE_RATING');
+    }
+    
+    return await this.create(ratingData);
+  } catch (error) {
+    if (error.code === 11000 || error.message === 'DUPLICATE_RATING') {
+      throw new Error('You have already rated this material for this transaction');
+    }
+    throw error;
+  }
+};
 
 const BookRating = mongoose.model('BookRating', bookRatingSchema);
 export default BookRating;

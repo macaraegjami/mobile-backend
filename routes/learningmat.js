@@ -435,22 +435,8 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
       });
     }
 
-    // Check if user has already rated this material for this transaction
-    const existingRating = await BookRating.findOne({
-      userId,
-      bookId,
-      transactionId
-    });
-
-    if (existingRating) {
-      return res.status(400).json({
-        success: false,
-        message: 'You have already rated this material for this transaction'
-      });
-    }
-
-    // Create new rating
-    const newRating = await BookRating.create({
+    // Prepare rating data
+    const ratingData = {
       userId,
       bookId,
       transactionId,
@@ -458,24 +444,58 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
       review: review ? review.trim() : '',
       materialTitle: materialTitle || material.name,
       author: author || material.author
-    });
+    };
+
+    // Use the safe creation method
+    let newRating;
+    try {
+      newRating = await BookRating.createSafeRating(ratingData);
+    } catch (createError) {
+      console.error('Rating creation error:', createError);
+      
+      if (createError.message.includes('already rated')) {
+        return res.status(400).json({
+          success: false,
+          message: createError.message
+        });
+      }
+      
+      // For any other error, return generic message
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to submit rating. Please try again.',
+        error: createError.message
+      });
+    }
 
     console.log('New rating created:', newRating);
 
     // Update the borrow record to mark as rated (if you have this field)
-    if (borrow.isRated !== undefined) {
-      borrow.isRated = true;
-      await borrow.save();
+    try {
+      if (borrow.isRated !== undefined) {
+        borrow.isRated = true;
+        await borrow.save();
+      }
+    } catch (borrowUpdateError) {
+      console.warn('Could not update borrow record isRated field:', borrowUpdateError.message);
+      // Don't fail the request if this fails
     }
 
     // Update material's average rating
-    const allRatings = await BookRating.find({ bookId: bookId });
-    const averageRating = allRatings.reduce((sum, r) => sum + r.rating, 0) / allRatings.length;
-
-    await LearningMaterial.findByIdAndUpdate(bookId, {
-      averageRating: parseFloat(averageRating.toFixed(1)),
-      totalRatings: allRatings.length
-    });
+    try {
+      const allRatings = await BookRating.find({ bookId: bookId });
+      if (allRatings.length > 0) {
+        const averageRating = allRatings.reduce((sum, r) => sum + r.rating, 0) / allRatings.length;
+        
+        await LearningMaterial.findByIdAndUpdate(bookId, {
+          averageRating: parseFloat(averageRating.toFixed(1)),
+          totalRatings: allRatings.length
+        });
+      }
+    } catch (updateError) {
+      console.warn('Could not update material average rating:', updateError.message);
+      // Don't fail the request if this fails
+    }
 
     res.status(201).json({
       success: true,
@@ -489,15 +509,7 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
     });
   } catch (error) {
     console.error('Error submitting rating:', error);
-
-    // Handle duplicate key error specifically
-    if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        message: 'You have already rated this material for this transaction'
-      });
-    }
-
+    
     res.status(500).json({
       success: false,
       message: 'Server error while submitting rating',
@@ -511,7 +523,7 @@ router.get('/:id/ratings', authenticateToken, asyncHandler(async (req, res) => {
   try {
     const bookId = req.params.id;
 
-    const ratings = await BookRating.find({
+    const ratings = await BookRating.find({ 
       bookId
     }).populate('userId', 'firstName lastName').sort({ createdAt: -1 });
 
@@ -519,7 +531,7 @@ router.get('/:id/ratings', authenticateToken, asyncHandler(async (req, res) => {
       success: true,
       ratings: ratings,
       totalRatings: ratings.length,
-      averageRating: ratings.length > 0
+      averageRating: ratings.length > 0 
         ? parseFloat((ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length).toFixed(1))
         : 0
     });
