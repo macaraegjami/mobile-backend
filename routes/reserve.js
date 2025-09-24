@@ -58,12 +58,26 @@ router.post('/', async (req, res) => {
     const pickup = new Date(pickupDate);
     const reservation = reservationDate ? new Date(reservationDate) : new Date();
 
-    // ✅ Validation: weekdays only
-    if ([0, 6].includes(pickup.getDay()) || [0, 6].includes(reservation.getDay())) {
+    // ✅ CORRECTED VALIDATION: Only pickup date must be weekday
+    // Reservation date can be any day (including weekends)
+    // Pickup date must be weekday only
+    if ([0, 6].includes(pickup.getDay())) { // 0 = Sunday, 6 = Saturday
       await session.abortTransaction();
-      return res.status(400).json({ error: 'Reservation and pickup dates must be on weekdays.' });
+      return res.status(400).json({
+        error: 'Pickup date must be on a weekday (Monday-Friday).',
+        receivedPickupDate: pickupDate,
+        pickupDayOfWeek: pickup.getDay() // 0-6 where 0 is Sunday
+      });
     }
-    
+
+    // ✅ Reservation date validation (can be any day, but must be valid)
+    if (reservation > pickup) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        error: 'Reservation date cannot be after pickup date.'
+      });
+    }
+
     // 8. Better Data Population - Get user info if not provided
     let userInfo = {};
     if (!userName || !userId) {
