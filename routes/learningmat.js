@@ -356,19 +356,14 @@ router.post('/:id/return', authenticateToken, asyncHandler(async (req, res) => {
   }
 }));
 
-// FIXED: Check if user has already rated a specific transaction
-// This route should be: GET /api/learningmat/:id/rating/check/:transactionId
+
 router.get('/:id/rating/check/:transactionId', authenticateToken, asyncHandler(async (req, res) => {
   try {
-    const bookId = req.params.id;
-    const transactionId = req.params.transactionId;
+    const { id: bookId, transactionId } = req.params;
     const userId = req.user._id;
 
-    console.log('Checking rating for:', { bookId, transactionId, userId });
-
-    // Validate ObjectId formats
-    if (!mongoose.Types.ObjectId.isValid(bookId) || 
-        !mongoose.Types.ObjectId.isValid(transactionId)) {
+    // Validate IDs
+    if (!mongoose.Types.ObjectId.isValid(bookId) || !mongoose.Types.ObjectId.isValid(transactionId)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid ID format'
@@ -376,151 +371,62 @@ router.get('/:id/rating/check/:transactionId', authenticateToken, asyncHandler(a
     }
 
     const existingRating = await BookRating.findOne({
-      userId: userId,
-      bookId: bookId,
-      transactionId: transactionId
+      userId,
+      bookId,
+      transactionId
     });
 
-    console.log('Existing rating found:', existingRating);
-
-    res.json({
+    return res.json({
       success: true,
       hasRated: !!existingRating,
       rating: existingRating || null
     });
   } catch (error) {
-    console.error('Error checking existing rating:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: 'Failed to check existing rating',
-      error: error.message
+      message: 'Failed to check existing rating'
     });
   }
 }));
 
-// FIXED: Improved rating submission endpoint
+
 router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
   try {
+    const { id: bookId } = req.params;
     const { rating, review, transactionId, materialTitle, author } = req.body;
     const userId = req.user._id;
-    const bookId = req.params.id;
 
-    console.log('Rating submission received:', {
-      userId, bookId, transactionId, rating, review
-    });
+    if (!mongoose.Types.ObjectId.isValid(bookId) || !mongoose.Types.ObjectId.isValid(transactionId)) {
+      return res.status(400).json({ success: false, message: 'Invalid ID format' });
+    }
 
-    // Validate input
     if (!rating || rating < 1 || rating > 5) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide a valid rating between 1 and 5'
-      });
+      return res.status(400).json({ success: false, message: 'Rating must be between 1 and 5' });
     }
 
-    if (!transactionId || !mongoose.Types.ObjectId.isValid(transactionId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Valid transaction ID is required'
-      });
-    }
-
-    // Check if the material exists
-    const material = await LearningMaterial.findById(bookId);
-    if (!material) {
-      return res.status(404).json({
-        success: false,
-        message: 'Learning material not found'
-      });
-    }
-
-    // Check if the borrow transaction exists and is returned
-    const borrow = await BorrowRequest.findOne({
-      _id: transactionId,
-      userId: userId,
-      materialId: bookId,
-      status: 'returned'
+    const newRating = await BookRating.createSafeRating({
+      userId,
+      bookId,
+      transactionId,
+      rating,
+      review: review?.trim() || '',
+      materialTitle,
+      author
     });
 
-    if (!borrow) {
-      return res.status(404).json({
-        success: false,
-        message: 'Transaction not found, not returned, or does not belong to you'
-      });
-    }
-
-    // Check if already rated
-    const existingRating = await BookRating.findOne({
-      userId: userId,
-      bookId: bookId,
-      transactionId: transactionId
-    });
-
-    if (existingRating) {
-      return res.status(400).json({
-        success: false,
-        message: 'You have already rated this transaction'
-      });
-    }
-
-    // Prepare rating data
-    const ratingData = {
-      userId: userId,
-      bookId: bookId,
-      transactionId: transactionId,
-      rating: parseInt(rating),
-      review: review ? review.trim() : '',
-      materialTitle: materialTitle || material.name,
-      author: author || material.author
-    };
-
-    // Create the rating
-    const newRating = await BookRating.create(ratingData);
-
-    console.log('New rating created:', newRating);
-
-    // Update the borrow record to mark as rated
-    try {
-      borrow.isRated = true;
-      await borrow.save();
-    } catch (borrowUpdateError) {
-      console.warn('Could not update borrow record isRated field:', borrowUpdateError.message);
-    }
-
-    // Update material's average rating
-    try {
-      const allRatings = await BookRating.find({ bookId: bookId });
-      if (allRatings.length > 0) {
-        const averageRating = allRatings.reduce((sum, r) => sum + r.rating, 0) / allRatings.length;
-        
-        await LearningMaterial.findByIdAndUpdate(bookId, {
-          averageRating: parseFloat(averageRating.toFixed(1)),
-          totalRatings: allRatings.length
-        });
-      }
-    } catch (updateError) {
-      console.warn('Could not update material average rating:', updateError.message);
-    }
-
-    res.status(201).json({
+    return res.json({
       success: true,
       message: 'Rating submitted successfully',
-      data: {
-        _id: newRating._id,
-        rating: newRating.rating,
-        review: newRating.review,
-        createdAt: newRating.createdAt
-      }
+      rating: newRating
     });
   } catch (error) {
-    console.error('Error submitting rating:', error);
-    
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: 'Server error while submitting rating',
-      error: error.message
+      message: error.message || 'Failed to submit rating'
     });
   }
 }));
+
 
 // Get all ratings for a material
 router.get('/:id/ratings', asyncHandler(async (req, res) => {
