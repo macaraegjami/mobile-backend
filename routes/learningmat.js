@@ -357,6 +357,35 @@ router.post('/:id/return', authenticateToken, asyncHandler(async (req, res) => {
 }));
 
 // In your learningmat.js routes file, replace the existing rating route with this:
+// Add this route to check if user has already rated a specific transaction
+router.get('/:id/rating/check/:transactionId', authenticateToken, asyncHandler(async (req, res) => {
+  try {
+    const bookId = req.params.id;
+    const transactionId = req.params.transactionId;
+    const userId = req.user._id;
+
+    const existingRating = await BookRating.findOne({
+      userId,
+      bookId,
+      transactionId
+    });
+
+    res.json({
+      success: true,
+      hasRated: !!existingRating,
+      rating: existingRating || null
+    });
+  } catch (error) {
+    console.error('Error checking existing rating:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check existing rating',
+      error: error.message
+    });
+  }
+}));
+
+// Improved rating submission endpoint
 router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
   try {
     const { rating, review, transactionId, materialTitle, author } = req.body;
@@ -375,10 +404,10 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
       });
     }
 
-    if (!transactionId) {
+    if (!transactionId || !mongoose.Types.ObjectId.isValid(transactionId)) {
       return res.status(400).json({
         success: false,
-        message: 'Transaction ID is required'
+        message: 'Valid transaction ID is required'
       });
     }
 
@@ -402,7 +431,7 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
     if (!borrow) {
       return res.status(404).json({
         success: false,
-        message: 'Borrow transaction not found, not returned, or does not belong to you'
+        message: 'Transaction not found, not returned, or does not belong to you'
       });
     }
 
@@ -425,32 +454,42 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
       userId,
       bookId,
       transactionId,
-      rating,
-      review: review || '',
+      rating: parseInt(rating),
+      review: review ? review.trim() : '',
       materialTitle: materialTitle || material.name,
       author: author || material.author
     });
 
     console.log('New rating created:', newRating);
 
-    // Update the borrow record to mark as rated
-    borrow.isRated = true;
-    await borrow.save();
+    // Update the borrow record to mark as rated (if you have this field)
+    if (borrow.isRated !== undefined) {
+      borrow.isRated = true;
+      await borrow.save();
+    }
 
     // Update material's average rating
-    const ratings = await BookRating.find({ bookId: bookId });
-    const averageRating = ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length;
-    material.averageRating = parseFloat(averageRating.toFixed(1));
-    await material.save();
+    const allRatings = await BookRating.find({ bookId: bookId });
+    const averageRating = allRatings.reduce((sum, r) => sum + r.rating, 0) / allRatings.length;
+
+    await LearningMaterial.findByIdAndUpdate(bookId, {
+      averageRating: parseFloat(averageRating.toFixed(1)),
+      totalRatings: allRatings.length
+    });
 
     res.status(201).json({
       success: true,
       message: 'Rating submitted successfully',
-      data: newRating
+      data: {
+        _id: newRating._id,
+        rating: newRating.rating,
+        review: newRating.review,
+        createdAt: newRating.createdAt
+      }
     });
   } catch (error) {
     console.error('Error submitting rating:', error);
-    
+
     // Handle duplicate key error specifically
     if (error.code === 11000) {
       return res.status(400).json({
@@ -458,7 +497,7 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
         message: 'You have already rated this material for this transaction'
       });
     }
-    
+
     res.status(500).json({
       success: false,
       message: 'Server error while submitting rating',
@@ -467,20 +506,22 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
   }
 }));
 
-// Add this GET endpoint to check ratings
+// Get all ratings for a material
 router.get('/:id/ratings', authenticateToken, asyncHandler(async (req, res) => {
   try {
     const bookId = req.params.id;
-    const userId = req.user._id;
 
-    const ratings = await BookRating.find({ 
-      bookId,
-      userId 
-    }).populate('userId', 'firstName lastName');
+    const ratings = await BookRating.find({
+      bookId
+    }).populate('userId', 'firstName lastName').sort({ createdAt: -1 });
 
     res.json({
       success: true,
-      ratings: ratings
+      ratings: ratings,
+      totalRatings: ratings.length,
+      averageRating: ratings.length > 0
+        ? parseFloat((ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length).toFixed(1))
+        : 0
     });
   } catch (error) {
     console.error('Error fetching ratings:', error);

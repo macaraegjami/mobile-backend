@@ -25,7 +25,8 @@ const bookRatingSchema = new mongoose.Schema({
   review: {
     type: String,
     maxlength: 500,
-    trim: true
+    trim: true,
+    default: ''
   },
   materialTitle: {
     type: String,
@@ -39,15 +40,12 @@ const bookRatingSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Fix the unique index to prevent null values issue
-bookRatingSchema.index({ 
-  userId: 1, 
-  transactionId: 1 
-}, { 
-  unique: true,
-  partialFilterExpression: { 
-    transactionId: { $type: "objectId" } 
-  }
+// Create a compound unique index to prevent duplicate ratings for the same transaction
+bookRatingSchema.index({
+  userId: 1,
+  transactionId: 1
+}, {
+  unique: true
 });
 
 const BookRating = mongoose.model('BookRating', bookRatingSchema);
