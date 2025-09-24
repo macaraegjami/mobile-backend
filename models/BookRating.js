@@ -13,7 +13,7 @@ const bookRatingSchema = new mongoose.Schema({
   },
   transactionId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'BorrowRequest', // Changed from 'Transaction' to 'BorrowRequest'
+    ref: 'BorrowRequest',
     required: true
   },
   rating: {
@@ -39,8 +39,16 @@ const bookRatingSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Prevent duplicate ratings for the same transaction
-bookRatingSchema.index({ userId: 1, transactionId: 1 }, { unique: true });
+// Fix the unique index to prevent null values issue
+bookRatingSchema.index({ 
+  userId: 1, 
+  transactionId: 1 
+}, { 
+  unique: true,
+  partialFilterExpression: { 
+    transactionId: { $type: "objectId" } 
+  }
+});
 
 const BookRating = mongoose.model('BookRating', bookRatingSchema);
 export default BookRating;

@@ -356,11 +356,16 @@ router.post('/:id/return', authenticateToken, asyncHandler(async (req, res) => {
   }
 }));
 
+// In your learningmat.js routes file, replace the existing rating route with this:
 router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
   try {
-    const { rating, review, transactionId } = req.body; // Changed from borrowId to transactionId
+    const { rating, review, transactionId, materialTitle, author } = req.body;
     const userId = req.user._id;
-    const bookId = req.params.id; // Changed from materialId to bookId
+    const bookId = req.params.id;
+
+    console.log('Rating submission received:', {
+      userId, bookId, transactionId, rating, review
+    });
 
     // Validate input
     if (!rating || rating < 1 || rating > 5) {
@@ -370,8 +375,15 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
       });
     }
 
+    if (!transactionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Transaction ID is required'
+      });
+    }
+
     // Check if the material exists
-    const material = await LearningMaterial.findById(bookId); // Changed variable name
+    const material = await LearningMaterial.findById(bookId);
     if (!material) {
       return res.status(404).json({
         success: false,
@@ -381,9 +393,9 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
 
     // Check if the borrow transaction exists and is returned
     const borrow = await BorrowRequest.findOne({
-      _id: transactionId, // Changed from borrowId to transactionId
+      _id: transactionId,
       userId,
-      materialId: bookId, // This should match your BorrowRequest schema field name
+      materialId: bookId,
       status: 'returned'
     });
 
@@ -397,8 +409,8 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
     // Check if user has already rated this material for this transaction
     const existingRating = await BookRating.findOne({
       userId,
-      bookId, // Changed from materialId to bookId
-      transactionId // Changed from borrowId to transactionId
+      bookId,
+      transactionId
     });
 
     if (existingRating) {
@@ -408,23 +420,25 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
       });
     }
 
-    // Create new rating with correct field names
+    // Create new rating
     const newRating = await BookRating.create({
       userId,
-      bookId, // Changed from materialId to bookId
-      transactionId, // Changed from borrowId to transactionId
+      bookId,
+      transactionId,
       rating,
-      review,
-      materialTitle: material.name,
-      author: material.author
+      review: review || '',
+      materialTitle: materialTitle || material.name,
+      author: author || material.author
     });
+
+    console.log('New rating created:', newRating);
 
     // Update the borrow record to mark as rated
     borrow.isRated = true;
     await borrow.save();
 
     // Update material's average rating
-    const ratings = await BookRating.find({ bookId: bookId }); // Changed field name
+    const ratings = await BookRating.find({ bookId: bookId });
     const averageRating = ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length;
     material.averageRating = parseFloat(averageRating.toFixed(1));
     await material.save();
@@ -436,9 +450,43 @@ router.post('/:id/rating', authenticateToken, asyncHandler(async (req, res) => {
     });
   } catch (error) {
     console.error('Error submitting rating:', error);
+    
+    // Handle duplicate key error specifically
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'You have already rated this material for this transaction'
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Server error while submitting rating',
+      error: error.message
+    });
+  }
+}));
+
+// Add this GET endpoint to check ratings
+router.get('/:id/ratings', authenticateToken, asyncHandler(async (req, res) => {
+  try {
+    const bookId = req.params.id;
+    const userId = req.user._id;
+
+    const ratings = await BookRating.find({ 
+      bookId,
+      userId 
+    }).populate('userId', 'firstName lastName');
+
+    res.json({
+      success: true,
+      ratings: ratings
+    });
+  } catch (error) {
+    console.error('Error fetching ratings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch ratings',
       error: error.message
     });
   }
