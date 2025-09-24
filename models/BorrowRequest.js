@@ -11,7 +11,7 @@ const borrowRequestSchema = new Schema({
   returnDate: Date,
   status: { 
     type: String, 
-    enum: ['pending', 'borrowed', 'cancelled', 'available', 'overdue'], 
+    enum: ['pending', 'borrowed', 'returned','cancelled', 'available', 'overdue'], 
     default: 'pending' 
   },
   daysOverdue: { type: Number, default: 0 },
