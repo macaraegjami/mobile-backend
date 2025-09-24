@@ -54,10 +54,10 @@ console.log(`📧 Brevo API: ${config.brevoApiKey ? 'Configured' : 'Not configur
 
 // Middleware with dynamic CORS origins
 app.use(cors({
-  origin: config.corsOrigins, // Use your configured origins
-  credentials: true, // Important for maintaining sessions
-  methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization'],
+    origin: config.corsOrigins, // Use your configured origins
+    credentials: true, // Important for maintaining sessions
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 app.use(express.json());
@@ -109,11 +109,20 @@ app.use('/api/borrow-requests', borrowRoutes);
 app.use('/api/ratings', bookRatingRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/attendance',attendanceRoutes );
-app.use('/api/feedback',feedbackRoutes );
-app.use('/api/suggestion',suggestionRoutes );
-app.use('/api/bookmarks',bookmarkRoutes );
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/feedback', feedbackRoutes);
+app.use('/api/suggestion', suggestionRoutes);
+app.use('/api/bookmarks', bookmarkRoutes);
 app.use('/api/history', historyRoutes);
+
+// In your server.js, add this after importing routes:
+console.log('📋 Registered routes for /api/learnmat:');
+learnMatRoutes.stack.forEach((layer) => {
+    if (layer.route) {
+        const methods = Object.keys(layer.route.methods).map(method => method.toUpperCase()).join(', ');
+        console.log(`  ${methods} ${layer.route.path}`);
+    }
+});
 
 
 // Error handling middleware
@@ -126,7 +135,7 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || config.port || 3000;
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Server running on port ${PORT}`);
+    console.log(`✅ Server running on port ${PORT}`);
 });
 
 
