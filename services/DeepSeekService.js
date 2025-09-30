@@ -13,7 +13,7 @@ class DeepSeekService {
       "HTTP-Referer": "react-native-app",
       "X-Title": "CLAMS - De Malacca Chatbot"
     };
-    
+
     // Enhanced API key validation
     if (!this.apiKey) {
       console.error("⛔ OpenRouter API Key is missing!");
@@ -132,85 +132,128 @@ SPECIAL COLLECTIONS:
 `;
   }
 
-  async generateResponse(userInput, context = "") {
-    if (!this.apiKey) {
+  async generateResponse(userInput) {
+    // First, check for very specific questions that need immediate answers
+    const specificAnswer = this.getImmediateAnswer(userInput);
+    if (specificAnswer) {
+      return specificAnswer;
+    }
+
+    // If no API key, use advanced fallback immediately
+    if (!this.apiKey || this.apiKey.length < 20) {
+      console.log("🔑 No valid API key, using fallback");
       return this.generateAdvancedFallback(userInput);
     }
 
-    if (!userInput || userInput.trim().length === 0) {
-      return "I notice you sent an empty message. What specific question about AIMS or CLAMS can I help you with?";
+    try {
+      console.log("🌐 Attempting API call to:", this.baseUrl);
+
+      const response = await fetch(this.baseUrl, {
+        method: "POST",
+        headers: this.headers,
+        body: JSON.stringify({
+          model: "deepseek/deepseek-r1:free",
+          messages: [
+            {
+              role: "system",
+              content: this.getSystemPrompt()
+            },
+            {
+              role: "user",
+              content: userInput
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 500,
+          stream: false
+        }),
+        timeout: 10000 // 10 second timeout
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.choices?.[0]?.message?.content) {
+        const aiResponse = data.choices[0].message.content.trim();
+        console.log("🤖 Raw AI response length:", aiResponse.length);
+
+        return this.cleanResponse(aiResponse, userInput);
+      }
+
+      throw new Error("Invalid response format from AI");
+
+    } catch (error) {
+      console.error("🌐 API call failed:", error.message);
+      return this.generateAdvancedFallback(userInput);
     }
+  }
 
-    // Quick response for very specific questions
-    const quickAnswer = this.getSpecificAnswer(userInput);
-    if (quickAnswer) {
-      return quickAnswer;
-    }
+  getImmediateAnswer(userInput) {
+    const input = userInput.toLowerCase();
 
-    // Try AI response with retries
-    let lastError;
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        console.log(`🔥 AI API attempt ${attempt}/2`);
-        
-        const response = await fetch(this.baseUrl, {
-          method: "POST",
-          headers: this.headers,
-          body: JSON.stringify({
-            model: "deepseek/deepseek-r1:free",
-            messages: [
-              {
-                role: "system", 
-                content: this.getSystemPrompt()
-              },
-              {
-                role: "user",
-                content: userInput
-              }
-            ],
-            temperature: 0.4,
-            max_tokens: 250,
-            stream: false
-          })
-        });
+    // Immediate answers for critical questions
+    const immediateAnswers = {
+      'library hours': `📚 CLAMS Library Operating Hours:
+• Monday-Friday: 7:00 AM - 7:00 PM  
+• Saturday: 8:00 AM - 5:00 PM
+• Sunday: Closed
+• Archives & Museum: By appointment
 
-        if (!response.ok) {
-          throw new Error(`API Error ${response.status}`);
-        }
+Need access to specific maritime resources?`,
 
-        const data = await response.json();
-        
-        if (data.choices?.[0]?.message?.content) {
-          const aiResponse = data.choices[0].message.content.trim();
-          
-          if (aiResponse.length < 20) {
-            throw new Error("Response too short");
-          }
-          
-          console.log(`✅ AI success on attempt ${attempt}`);
-          return this.cleanResponse(aiResponse, userInput);
-        }
-        
-        throw new Error("Invalid response format");
-        
-      } catch (error) {
-        lastError = error;
-        console.error(`Attempt ${attempt} failed:`, error.message);
-        
-        if (attempt < 2) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+      'membership fee': `💰 CLAMS Membership Fees:
+• AIMS Students: FREE with valid ID
+• External Researchers: ₱500/day or ₱2,000/month
+• Alumni: ₱1,000/year  
+• Faculty/Staff: FREE with employment ID
+• Maritime Professionals: Special industry rates
+
+What type of membership do you need?`,
+
+      'contact aims': `📞 AIMS-CLAMS Contact Information:
+• Phone: (02) 8831-9925
+• Email: info@aims.edu.ph  
+• Website: www.aims.edu.ph
+• Location: Pasay City, Metro Manila
+• Library Hours: Mon-Fri 7AM-7PM, Sat 8AM-5PM
+
+How can we assist you today?`,
+
+      'marine engineering program': `⚙️ BS Marine Engineering at AIMS:
+• Duration: 4 years
+• Focus: Ship engines, marine machinery, power systems
+• Facilities: Engine room simulators, workshops
+• Career: Ship engineer, port engineer, maritime surveyor
+• Training: Hands-on with M/V AIMS Explorer
+
+Interested in admission requirements?`,
+
+      'marine transportation program': `🧭 BS Marine Transportation at AIMS:
+• Duration: 4 years  
+• Focus: Navigation, cargo operations, vessel management
+• Facilities: Bridge simulators, navigation labs
+• Career: Ship officer, port captain, maritime operations
+• Training: Practical navigation experience
+
+Want curriculum details?`
+    };
+
+    for (const [keyword, answer] of Object.entries(immediateAnswers)) {
+      if (input.includes(keyword)) {
+        return answer;
       }
     }
 
-    console.error("🚫 AI failed, using fallback");
-    return this.generateAdvancedFallback(userInput);
+    return null;
   }
 
   // NEW: Get specific answers for common questions
   getSpecificAnswer(userInput) {
     const input = userInput.toLowerCase();
-    
+
     // Cost/Fee questions
     if (input.includes('how much') || input.includes('cost') || input.includes('price') || input.includes('fee')) {
       if (input.includes('membership') || input.includes('library')) {
@@ -229,7 +272,7 @@ SPECIAL COLLECTIONS:
 
 Need help with membership application or specific service costs?`;
       }
-      
+
       if (input.includes('tuition') || input.includes('program') || input.includes('aims')) {
         return `**AIMS Program Costs:**
 
@@ -253,7 +296,7 @@ AIMS tuition fees vary by program and year level. For current rates:
 
 Which program's costs are you interested in learning about?`;
       }
-      
+
       if (input.includes('artifact') || input.includes('museum') || input.includes('exhibition')) {
         return `**Maritime Museum Access:**
 
@@ -281,7 +324,7 @@ Which program's costs are you interested in learning about?`;
 Would you like to schedule a museum visit or learn about current exhibitions?`;
       }
     }
-    
+
     // Hours questions
     if (input.includes('hour') || input.includes('open') || input.includes('close') || input.includes('schedule')) {
       return `**AIMS-CLAMS Operating Hours:**
@@ -365,19 +408,19 @@ Answer the user's question directly and specifically using this information.`;
 
   cleanResponse(response, userInput) {
     let cleaned = response.trim();
-    
+
     // Remove generic introductions from non-greeting responses
     if (!this.isGreeting(userInput)) {
       cleaned = cleaned.replace(/^.*?I'm De Malacca[^.]*\.?\s*/i, '');
       cleaned = cleaned.replace(/^.*?Ahoy[^.]*\.?\s*/i, '');
       cleaned = cleaned.replace(/^.*?Welcome[^.]*\.?\s*/i, '');
     }
-    
+
     // Ensure we have substantial content
     if (cleaned.length < 50) {
       return this.generateAdvancedFallback(userInput);
     }
-    
+
     return cleaned;
   }
 
@@ -389,7 +432,7 @@ Answer the user's question directly and specifically using this information.`;
 
   generateAdvancedFallback(userInput) {
     const input = userInput.toLowerCase();
-    
+
     // Specific fallback responses
     if (input.includes('cost') || input.includes('fee') || input.includes('price') || input.includes('how much')) {
       if (input.includes('membership')) {
@@ -403,23 +446,23 @@ Answer the user's question directly and specifically using this information.`;
       }
       return "**General Costs:** CLAMS membership ₱500/day (external), AIMS tuition varies by program, Museum tours ₱50/person. Contact (02) 8831-9925 for specific pricing. What costs did you want to know about?";
     }
-    
+
     if (input.includes('hour') || input.includes('open')) {
       return "**Operating Hours:** Library Mon-Fri 7AM-7PM, Sat 8AM-5PM. Archives & Museum by appointment. AIMS campus Mon-Fri 7AM-8PM. Contact (02) 8831-9925. Which service do you need?";
     }
-    
+
     if (input.includes('borrow') || input.includes('checkout')) {
       return "**Borrowing:** AIMS students 5 books/2 weeks, Faculty 10 books/1 month. External members reference use. Overdue ₱10/day per book. Need help finding specific maritime resources?";
     }
-    
+
     if (input.includes('program') || input.includes('marine') || input.includes('aims')) {
       return "**AIMS Programs:** BS Marine Engineering (ship engines), BS Marine Transportation (navigation), BS Customs Administration, BS Maritime Business Management. All include simulator training. Which program appeals to you?";
     }
-    
+
     if (input.includes('museum') || input.includes('artifact') || input.includes('exhibit')) {
       return "**Maritime Museum:** Ship models, nautical instruments, Philippine naval history. Free with membership, group tours ₱50/person. Educational programs available. Want to schedule a visit?";
     }
-    
+
     // Default comprehensive response
     return "I can help with AIMS maritime programs, CLAMS library services, membership fees, borrowing policies, museum tours, and archives access. **Contact:** (02) 8831-9925 | **Hours:** Mon-Fri 7AM-7PM | **Location:** Pasay City. What specific information do you need?";
   }
