@@ -1,4 +1,4 @@
-// src/services/DeepSeekService.js - FIXED VERSION
+// src/services/DeepSeekService.js - WORKING VERSION
 import { API_KEYS } from '../config/api.js';
 
 class DeepSeekService {
@@ -24,8 +24,8 @@ class DeepSeekService {
     this.headers = {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${this.apiKey}`,
-      "HTTP-Referer": "https://aims.edu.ph", // Your actual domain
-      "X-Title": "AIMS-CLAMS Chatbot"
+      "HTTP-Referer": "https://aims.edu.ph",
+      "X-Title": "AIMS-CLAMS De Malacca"
     };
   }
 
@@ -48,71 +48,88 @@ class DeepSeekService {
     try {
       console.log("🌐 Attempting OpenRouter API call...");
       
-      const requestBody = {
-        model: "deepseek/deepseek-chat", // Correct model name
-        messages: [
-          {
-            role: "system",
-            content: this.getEnhancedSystemPrompt()
-          },
-          {
-            role: "user",
-            content: userInput
+      // Try different models - OpenRouter has specific available models
+      const modelsToTry = [
+        "google/gemini-pro",  // Free model
+        "anthropic/claude-3-haiku", // Free model
+        "meta-llama/llama-3-8b-instruct", // Free model
+        "deepseek/deepseek-chat" // Might require credits
+      ];
+
+      let lastError = null;
+      
+      for (const model of modelsToTry) {
+        try {
+          console.log(`🔄 Trying model: ${model}`);
+          
+          const requestBody = {
+            model: model,
+            messages: [
+              {
+                role: "system",
+                content: this.getEnhancedSystemPrompt()
+              },
+              {
+                role: "user",
+                content: userInput
+              }
+            ],
+            temperature: 0.7,
+            max_tokens: 800,
+            stream: false
+          };
+
+          const response = await fetch(this.baseUrl, {
+            method: "POST",
+            headers: this.headers,
+            body: JSON.stringify(requestBody)
+          });
+
+          console.log(`📡 Response status for ${model}:`, response.status);
+
+          if (response.status === 401) {
+            console.error("❌ 401 Unauthorized - Invalid API Key");
+            this.isAuthenticated = false;
+            throw new Error("API authentication failed");
           }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000,
-        stream: false
-      };
 
-      console.log("📤 Sending request to OpenRouter...");
-      
-      const response = await fetch(this.baseUrl, {
-        method: "POST",
-        headers: this.headers,
-        body: JSON.stringify(requestBody)
-      });
+          if (response.status === 402) {
+            console.log(`💰 ${model} requires payment, trying next model...`);
+            continue;
+          }
 
-      console.log("📡 Response status:", response.status);
+          if (response.status === 404) {
+            console.log(`❓ ${model} not found, trying next model...`);
+            continue;
+          }
 
-      // Handle specific HTTP errors
-      if (response.status === 401) {
-        console.error("❌ 401 Unauthorized - Invalid API Key");
-        this.isAuthenticated = false;
-        throw new Error("API authentication failed - check your API key");
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.log(`⚠️ ${model} failed: ${response.status}, trying next...`);
+            continue;
+          }
+
+          const data = await response.json();
+          
+          if (data.choices && data.choices[0] && data.choices[0].message) {
+            const aiResponse = data.choices[0].message.content.trim();
+            console.log(`✅ Success with model: ${model}`);
+            console.log("🤖 AI Response length:", aiResponse.length);
+            return this.cleanAIResponse(aiResponse);
+          }
+          
+        } catch (error) {
+          lastError = error;
+          console.log(`⚠️ Model ${model} failed:`, error.message);
+          continue;
+        }
       }
 
-      if (response.status === 402) {
-        console.error("❌ 402 Payment Required - Out of credits");
-        this.isAuthenticated = false;
-        throw new Error("OpenRouter credits exhausted");
-      }
-
-      if (response.status === 429) {
-        console.error("❌ 429 Rate Limited");
-        throw new Error("Rate limited, please try again later");
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("❌ API Error:", response.status, errorText);
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
-      }
-
-      const data = await response.json();
-      console.log("✅ API Response received");
-      
-      if (data.choices && data.choices[0] && data.choices[0].message) {
-        const aiResponse = data.choices[0].message.content.trim();
-        console.log("🤖 AI Response length:", aiResponse.length);
-        return this.cleanAIResponse(aiResponse);
-      } else {
-        console.error("❌ Unexpected response format:", data);
-        throw new Error("Invalid response format from AI service");
-      }
+      // If all models failed
+      throw new Error(`All models failed. Last error: ${lastError?.message}`);
 
     } catch (error) {
-      console.error("💥 DeepSeekService Error:", error.message);
+      console.error("💥 All AI models failed:", error.message);
       this.isAuthenticated = false;
       return this.generateEnhancedFallback(userInput);
     }
@@ -121,7 +138,13 @@ class DeepSeekService {
   getEnhancedSystemPrompt() {
     return `You are De Malacca, the expert maritime librarian assistant for AIMS-CLAMS (Asian Institute of Maritime Studies - Center of Library, Archives, and Museum Services).
 
-IMPORTANT: You MUST answer questions specifically about AIMS academics, CLAMS services, and maritime topics. If asked about unrelated topics, politely redirect to AIMS/CLAMS services.
+IMPORTANT GUIDELINES:
+1. Answer questions specifically about AIMS academics, CLAMS services, and maritime topics
+2. If asked about unrelated topics, politely redirect to AIMS/CLAMS services
+3. Provide accurate, helpful information
+4. Keep responses conversational but professional
+5. Use maritime terminology appropriately
+6. Be concise but thorough
 
 AIMS-CLAMS KNOWLEDGE BASE:
 
@@ -134,8 +157,8 @@ INSTITUTIONAL INFO:
 - Library Hours: Monday-Friday 7:00 AM - 7:00 PM, Saturday 8:00 AM - 5:00 PM
 
 ACADEMIC PROGRAMS:
-• BS Marine Engineering (4 years) - ship engines, machinery, power systems
-• BS Marine Transportation (4 years) - navigation, cargo operations, vessel management  
+• BS Marine Engineering (4 years)
+• BS Marine Transportation (4 years)  
 • BS Customs Administration (4 years)
 • BS Maritime Business Management (4 years)
 
@@ -143,19 +166,17 @@ FACILITIES:
 • Ship bridge simulators & engine room simulators
 • Training vessel M/V AIMS Explorer
 • Maritime library with 25,000+ specialized volumes
-• IMO publications and maritime law databases
 • Archives with Philippine maritime history
 • Maritime museum with ship models and artifacts
 
 LIBRARY SERVICES:
 - Membership: AIMS students FREE, External researchers ₱500/day, Alumni ₱1,000/year
 - Borrowing: Students 5 books/2 weeks, Faculty 10 books/1 month
-- Resources: Maritime databases, STCW references, thesis collection
-- Study areas, computer access, research assistance
+- Resources: Maritime databases, STCW references, IMO publications
 
 MUSEUM & ARCHIVES:
 - Maritime heritage exhibitions
-- Historical ship documentation
+- Historical ship documentation  
 - Educational tours available
 - Research access by appointment
 
@@ -166,7 +187,26 @@ Always provide specific, accurate information and end with a helpful follow-up q
     const input = userInput.toLowerCase().trim();
     
     const immediateAnswers = {
-      // Library hours
+      // Student discounts question specifically
+      'student discount': `🎓 Student Benefits at AIMS-CLAMS:
+
+**AIMS Students Enjoy:**
+• **FREE** library access with valid student ID
+• **FREE** museum and archives access
+• **5 books** borrowing limit for 2 weeks
+• **No membership fees** - completely free!
+• Access to all maritime databases and resources
+• Study areas and research assistance
+• Computer and WiFi access
+
+**Additional Student Support:**
+• Thesis and research assistance
+• Maritime database training
+• Career resources for maritime industry
+• Internship opportunities through AIMS
+
+As an AIMS student, you get full access to all CLAMS services at no cost! Need help with specific research or resources?`,
+
       'library hours': `📚 CLAMS Library Operating Hours:
 • Monday-Friday: 7:00 AM - 7:00 PM  
 • Saturday: 8:00 AM - 5:00 PM
@@ -217,25 +257,7 @@ Would you like more details about the curriculum or career opportunities?`,
 • BS Customs Administration
 • BS Maritime Business Management
 
-All programs include hands-on simulator training and prepare students for international maritime careers. Which program interests you most?`,
-
-      'borrow': `📖 Borrowing Policies:
-• AIMS Students: 5 books for 2 weeks
-• Faculty: 10 books for 1 month
-• External Members: Reference use (special arrangements possible)
-• Renewal: Once if no holds
-• Overdue Fine: ₱10/day per book
-
-We have 25,000+ maritime specialized books! What topics are you researching?`,
-
-      'museum': `🏛️ Maritime Museum Features:
-• Historic ship models from different eras
-• Nautical instruments and maritime artifacts
-• Philippine naval and merchant marine history
-• Interactive maritime displays
-• Educational tours for schools and groups
-
-Museum access is included with library membership. Would you like to schedule a visit?`
+All programs include hands-on simulator training and prepare students for international maritime careers. Which program interests you most?`
     };
 
     // Check for exact matches or contains
@@ -253,23 +275,59 @@ Museum access is included with library membership. Would you like to schedule a 
     const input = userInput.toLowerCase();
     
     // Enhanced contextual fallbacks
-    if (input.includes('cost') || input.includes('fee') || input.includes('price') || input.includes('how much')) {
-      return `💰 Cost Information:
+    if (input.includes('student') && (input.includes('discount') || input.includes('benefit') || input.includes('free'))) {
+      return `🎓 **AIMS Student Benefits:**
 
-**CLAMS Membership:**
-• AIMS Students: FREE
+**Completely FREE Access:**
+• Library membership & resources
+• Museum visits & exhibitions  
+• Archives research access
+• Maritime database usage
+• Study areas and facilities
+
+**Borrowing Privileges:**
+• 5 books for 2 weeks
+• Renewal option if no holds
+• Access to rare maritime collections
+• IMO publications and STCW references
+
+**Research Support:**
+• Thesis assistance from maritime librarians
+• Database training sessions
+• Citation and research help
+• Career resource guidance
+
+**Just show your valid AIMS student ID at the CLAMS desk to get started!**
+
+What specific resources would you like to explore as a student?`;
+    }
+
+    if (input.includes('cost') || input.includes('fee') || input.includes('price') || input.includes('how much')) {
+      return `💰 **AIMS-CLAMS Cost Overview:**
+
+**Membership Fees:**
+• AIMS Students: **FREE** (with ID)
 • External Researchers: ₱500/day or ₱2,000/month  
 • Alumni: ₱1,000/year
+• Faculty/Staff: **FREE** (with employment ID)
 
-**AIMS Programs:** Tuition varies by program. Contact (02) 8831-9925 for current rates.
+**Program Tuition:** Varies by program - contact (02) 8831-9925
 
-**Museum Tours:** Group tours ₱50/person (minimum 10 people)
+**Additional Services:**
+• Museum Group Tours: ₱50/person (min. 10 people)
+• Research Consultation: Included with membership
+• Digitization: Rates vary by project
 
-Scholarships and payment plans available! What specific costs would you like to know about?`;
+**Scholarships & Discounts:**
+• Merit-based scholarships available
+• Industry professional discounts
+• Senior citizen/PWD discounts
+
+What specific cost information do you need?`;
     }
 
     if (input.includes('admission') || input.includes('apply') || input.includes('enroll')) {
-      return `📋 AIMS Admission Process:
+      return `📋 **AIMS Admission Process:**
 
 **Requirements:**
 • High school diploma or equivalent
@@ -285,12 +343,13 @@ Scholarships and payment plans available! What specific costs would you like to 
 
 **Contact Admissions:** (02) 8831-9925
 **Email:** info@aims.edu.ph
+**Location:** Pasay City, Metro Manila
 
 Would you like details about a specific program's admission requirements?`;
     }
 
     if (input.includes('archive') || input.includes('historical') || input.includes('document')) {
-      return `📜 CLAMS Archives Services:
+      return `📜 **CLAMS Archives Services:**
 
 **Collections:**
 • Philippine maritime history documents
@@ -299,9 +358,15 @@ Would you like details about a specific program's admission requirements?`;
 • AIMS institutional archives since 1993
 
 **Access:**
-• By appointment only
+• By appointment only during library hours
 • Research assistance available
-• Digitization services
+• Digitization services for fragile documents
+
+**Research Areas:**
+• Philippine naval history
+• Merchant marine development
+• Maritime trade routes
+• Shipbuilding traditions
 
 **Contact:** (02) 8831-9925 to schedule archive research
 
@@ -309,23 +374,31 @@ What specific maritime history are you interested in exploring?`;
     }
 
     // Default comprehensive response
-    return `⚓ Ahoy! I'm De Malacca, your AIMS-CLAMS maritime assistant! 
+    return `⚓ **Ahoy! I'm De Malacca, your AIMS-CLAMS maritime assistant!** 
 
-I can help you with:
+I can help you navigate:
 
-🎓 **AIMS Academic Programs** - Marine Engineering, Marine Transportation, etc.
-📚 **CLAMS Library Services** - Membership, borrowing, research help
-🏛️ **Maritime Museum** - Exhibitions, tours, artifacts
-📜 **Archives** - Historical documents, research access
-💰 **Fees & Membership** - Costs, payment options
-📞 **Contact Information** - Phone, email, location
+🎓 **AIMS Academic Programs**
+• Marine Engineering, Marine Transportation, Customs Administration, Maritime Business
 
-**Quick Facts:**
-• Location: Pasay City, Metro Manila
-• Contact: (02) 8831-9925
-• Hours: Mon-Fri 7AM-7PM, Sat 8AM-5PM
+📚 **CLAMS Library Services** 
+• Membership, borrowing, research assistance, database access
 
-What specific information can I help you navigate today?`;
+🏛️ **Maritime Museum**
+• Exhibitions, ship models, artifacts, educational tours
+
+📜 **Archives & Historical Research**
+• Philippine maritime history, ship documentation, records
+
+💰 **Fees & Membership**
+• Student benefits, costs, payment options
+
+📞 **Contact & Location**
+• (02) 8831-9925 | info@aims.edu.ph | Pasay City
+
+**Library Hours:** Monday-Friday 7AM-7PM, Saturday 8AM-5PM
+
+What would you like to explore today? ⚓`;
   }
 
   cleanAIResponse(response) {
@@ -353,20 +426,20 @@ What specific information can I help you navigate today?`;
     }
 
     try {
-      const testResponse = await fetch(this.baseUrl, {
+      const response = await fetch(this.baseUrl, {
         method: "POST",
         headers: this.headers,
         body: JSON.stringify({
-          model: "deepseek/deepseek-chat",
+          model: "google/gemini-pro",
           messages: [{ role: "user", content: "Say 'API test successful'" }],
           max_tokens: 10
         })
       });
 
       return {
-        success: testResponse.ok,
-        status: testResponse.status,
-        statusText: testResponse.statusText
+        success: response.ok,
+        status: response.status,
+        statusText: response.statusText
       };
     } catch (error) {
       return {
