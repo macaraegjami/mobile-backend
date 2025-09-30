@@ -145,41 +145,123 @@ class ChatService {
     }
   }
 
-  // NEW: Quick response checker for common queries
-  getQuickResponse(userInput) {
-    const input = userInput.toLowerCase().trim();
-    
-    // Check exact matches first
-    if (this.predefinedResponses[input]) {
-      return this.predefinedResponses[input];
-    }
-
-    // Check partial matches
-    for (const [key, response] of Object.entries(this.predefinedResponses)) {
-      if (input.includes(key) && key.length > 3) { // Avoid matching very short words
-        return response;
-      }
-    }
-
-    // Check for specific patterns
-    if (input.includes('how much') || input.includes('cost') || input.includes('price')) {
-      if (input.includes('membership') || input.includes('library')) {
-        return "CLAMS membership fees: AIMS students FREE, External researchers ₱500/day or ₱2,000/month, Alumni ₱1,000/year. Maritime industry professionals get special rates. Need specific membership details?";
-      }
-      if (input.includes('program') || input.includes('tuition') || input.includes('aims')) {
-        return "AIMS program tuition varies by course. Marine Engineering and Marine Transportation have different fees. Contact admissions at (02) 8831-9925 for current tuition rates and scholarships. Which program interests you?";
-      }
-      if (input.includes('artifact') || input.includes('museum')) {
-        return "Our Maritime Museum displays ship models and maritime artifacts. Museum tours are included with library membership or can be arranged separately. Educational group tours available by appointment. Want to schedule a visit?";
-      }
-    }
-
-    if (input.includes('borrow') || input.includes('checkout')) {
-      return "Borrowing privileges: AIMS students can borrow 5 books for 2 weeks, Faculty 10 books for 1 month. External members need day pass or monthly membership. Renewals allowed once if no holds. What specific maritime materials are you looking for?";
-    }
-
-    return null; // No quick response found
+// ENHANCED: Better quick response checker for FAQ questions
+getQuickResponse(userInput) {
+  const input = userInput.toLowerCase().trim();
+  
+  // Check exact matches first
+  if (this.predefinedResponses[input]) {
+    return this.predefinedResponses[input];
   }
+
+  // Enhanced FAQ question detection
+  const faqResponses = {
+    // AIMS Programs
+    "what maritime programs does aims offer?": "AIMS offers BS Marine Engineering (ship engines/machinery), BS Marine Transportation (navigation/operations), BS Customs Administration, and BS Maritime Business Management. All programs include hands-on simulator training. Which program interests you? ⚓",
+    
+    "how do i apply to aims?": "AIMS application process: 1) Submit high school transcript 2) Take entrance exam 3) Medical examination 4) Interview. Contact admissions at (02) 8831-9925 for details. Ready to start your maritime journey? 📝",
+    
+    "what are the admission requirements for marine engineering?": "Marine Engineering requirements: High school diploma, passing entrance exam, medical fitness certificate, good math/science grades. The 4-year program includes engine room simulator training. Need curriculum details? 🔧",
+    
+    "does aims have ship simulation facilities?": "Yes! AIMS has advanced ship simulators: Bridge simulators for navigation training and Engine Room simulators for machinery operations. These provide realistic maritime training. Want to tour our facilities? 🎮",
+    
+    "how much is the tuition for aims programs?": "AIMS tuition varies by program. Contact admissions at (02) 8831-9925 for current rates. Scholarships available for qualified students in Marine Engineering and Marine Transportation. Which program's costs interest you? 💰",
+
+    // Library Services
+    "what are clams library hours?": "CLAMS Library Hours: Monday-Friday 7:00 AM - 7:00 PM, Saturday 8:00 AM - 5:00 PM. Archives & Museum by appointment. Extended hours during exam periods! 📚",
+    
+    "how do i borrow maritime books?": "Borrowing: AIMS students 5 books/2 weeks, Faculty 10 books/1 month. Present valid ID at circulation desk. External researchers need day/month membership. Looking for specific maritime topics? 📖",
+    
+    "do you have imo publications?": "Yes! CLAMS has complete IMO (International Maritime Organization) publications including SOLAS, MARPOL, STCW conventions. Available in reference section. Need specific IMO standards? 🌐",
+    
+    "what maritime databases can i access?": "Access maritime databases: IMO documents, maritime law databases, shipping industry reports, STCW references, and academic maritime journals. Available to members during library hours. Researching specific topics? 💻",
+    
+    "how much are the membership fees?": "Membership: AIMS students FREE, External researchers ₱500/day or ₱2,000/month, Alumni ₱1,000/year, Maritime professionals special rates. Which membership type fits your needs? 👥",
+
+    // Research & Study
+    "how do i access maritime databases?": "Access databases: 1) Visit CLAMS during hours 2) Use library computers or WiFi 3) Librarian assistance available 4) Remote access for members. Need help with specific research? 🔍",
+    
+    "can you help with maritime thesis research?": "Absolutely! Our librarians specialize in maritime research assistance, citation help, database navigation, and literature reviews for thesis projects. What's your research topic? 🎓",
+    
+    "what research services are available?": "Research services: Literature searches, database training, citation assistance, inter-library loans, thesis support, and maritime industry data. Schedule research consultation! 📊",
+    
+    "do you have stcw references?": "Yes! Complete STCW (Standards of Training, Certification, Watchkeeping) references available, including latest amendments and implementation guides. Need specific STCW standards? 📋",
+    
+    "how do i book study spaces?": "Study spaces: Individual carrels and group study rooms available first-come basis. Quiet zones and collaborative areas. Open during library hours. Need specific study arrangements? 🪑",
+
+    // Digital Resources
+    "how do i access digital maritime collections?": "Digital access: 1) On-site library computers 2) Member WiFi 3) Remote login for members 4) Librarian-assisted database searches. What digital resources do you need? 🌐",
+    
+    "can i access resources remotely?": "Remote access available for CLAMS members! Login credentials provided with membership. Access maritime databases, e-books, and digital journals from anywhere. Need remote access setup? 🏠",
+    
+    "what online maritime databases do you have?": "Online databases: IMO docs, maritime law databases, shipping industry reports, academic journals, STCW resources, and vessel documentation. Available to members. Specific database needed? 💾",
+    
+    "do you have e-books on maritime topics?": "Yes! Growing e-book collection on maritime engineering, navigation, shipping management, maritime law, and marine safety. Access through our digital portal. Looking for specific e-books? 📱",
+    
+    "how do i get digital library access?": "Digital access: 1) Get CLAMS membership 2) Receive login credentials 3) Access via library website 4) Mobile app available. Our librarians can help with setup! 🔐",
+
+    // Archives & Museum
+    "how much do museum artifacts cost to see?": "Museum access: FREE with library membership! Group tours ₱50/person (min. 10). See historic ship models, maritime artifacts, Philippine naval history. Schedule your visit! 🏛️",
+    
+    "what ship models do you display?": "Ship models: Historic Philippine vessels, merchant ships, naval warships, traditional bancas, modern container ships. Each model tells a maritime story! Favorite ship era? 🚢",
+    
+    "do you have philippine maritime history records?": "Yes! Archives contain Philippine maritime history: ship documents, naval records, merchant marine history, port development, and maritime trade records. Researching specific periods? 📜",
+    
+    "how do i book a maritime museum tour?": "Museum tours: Call (02) 8831-9925 to schedule. Educational tours for schools, group tours, individual visits. Experience Philippine maritime heritage! Group size? 🎫",
+    
+    "what maritime exhibitions are running?": "Current exhibitions: Philippine Naval History, Modern Shipping Technology, Traditional Seafaring, Marine Conservation. Rotating exhibits every 3 months. Interested in specific themes? 🖼️",
+
+    // Contact & Location
+    "what are aims-clams operating hours?": "AIMS-CLAMS Hours: Library Mon-Fri 7AM-7PM, Sat 8AM-5PM. Archives/Museum by appointment. Campus Mon-Fri 7AM-8PM. Need specific service hours? ⏰",
+    
+    "how do i contact aims-clams directly?": "Contact: Phone (02) 8831-9925 | Email info@aims.edu.ph | Visit Pasay City campus. Staff available during library hours. What assistance do you need? 📞",
+    
+    "where is aims located in metro manila?": "AIMS Location: Pasay City, Metro Manila - near NAIA airport, accessible via LRT/MRT, in the maritime industry hub. Need directions or transportation info? 🗺️",
+    
+    "how do i reach specific departments?": "Department contacts: Library x101, Archives x102, Museum x103, Admissions x201, Accounting x301. Call (02) 8831-9925 and ask for extension. Which department? 🏢",
+    
+    "do you have weekend services?": "Weekend services: Library open Saturday 8AM-5PM. Archives/Museum by appointment only. Sunday: Closed. Need Saturday appointment? 🗓️"
+  };
+
+  // Check for exact FAQ matches
+  for (const [question, response] of Object.entries(faqResponses)) {
+    if (input === question.toLowerCase()) {
+      return response;
+    }
+  }
+
+  // Check partial matches for FAQ questions
+  for (const [question, response] of Object.entries(faqResponses)) {
+    const questionWords = question.toLowerCase().split(' ');
+    const inputWords = input.split(' ');
+    const matchCount = questionWords.filter(word => 
+      inputWords.some(inputWord => inputWord.includes(word) || word.includes(inputWord))
+    ).length;
+    
+    if (matchCount >= 3) { // At least 3 matching words
+      return response;
+    }
+  }
+
+  // Original quick response checks (keep existing logic)
+  if (input.includes('how much') || input.includes('cost') || input.includes('price')) {
+    if (input.includes('membership') || input.includes('library')) {
+      return "CLAMS membership fees: AIMS students FREE, External researchers ₱500/day or ₱2,000/month, Alumni ₱1,000/year. Maritime industry professionals get special rates. Need specific membership details?";
+    }
+    if (input.includes('program') || input.includes('tuition') || input.includes('aims')) {
+      return "AIMS program tuition varies by course. Marine Engineering and Marine Transportation have different fees. Contact admissions at (02) 8831-9925 for current tuition rates and scholarships. Which program interests you?";
+    }
+    if (input.includes('artifact') || input.includes('museum')) {
+      return "Our Maritime Museum displays ship models and maritime artifacts. Museum tours are included with library membership or can be arranged separately. Educational group tours available by appointment. Want to schedule a visit?";
+    }
+  }
+
+  if (input.includes('borrow') || input.includes('checkout')) {
+    return "Borrowing privileges: AIMS students can borrow 5 books for 2 weeks, Faculty 10 books for 1 month. External members need day pass or monthly membership. Renewals allowed once if no holds. What specific maritime materials are you looking for?";
+  }
+
+  return null; // No quick response found
+}
 
   // NEW: Build enhanced prompt for AI
   buildEnhancedPrompt(userInput) {
