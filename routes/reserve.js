@@ -88,14 +88,14 @@ router.post('/', async (req, res) => {
 
     // ✅ FIXED: Date comparisons using normalized dates
     const maxReservationDate = new Date(today);
-    maxReservationDate.setDate(today.getDate() + 2);
+    maxReservationDate.setUTCDate(today.getUTCDate() + 3); // Changed from +2 to +3
 
-    if (reservation < today) {
+    if (reservation > maxReservationDate) {
       await session.abortTransaction();
       return res.status(400).json({
-        error: 'Reservation date cannot be in the past.',
+        error: 'Reservation date must be within 3 days from today.',
         receivedReservationDate: reservation.toISOString().split('T')[0],
-        todayDate: today.toISOString().split('T')[0]
+        maxAllowedDate: maxReservationDate.toISOString().split('T')[0]
       });
     }
 
@@ -131,8 +131,8 @@ router.post('/', async (req, res) => {
 
     // ✅ FIXED: Pickup must be within 3 days of reservation (inclusive)
     const maxPickupDate = new Date(reservation);
-    maxPickupDate.setDate(reservation.getDate() + 2); // Reservation date + 2 days = 3 days total
-    maxPickupDate.setHours(23, 59, 59, 999);
+    maxPickupDate.setUTCDate(reservation.getUTCDate() + 3); // Changed from +2 to +3
+    maxPickupDate.setUTCHours(23, 59, 59, 999);
 
     if (pickup > maxPickupDate) {
       await session.abortTransaction();
