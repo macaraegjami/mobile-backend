@@ -41,42 +41,22 @@ router.post('/', async (req, res) => {
 
     console.log('Received reservation data:', req.body);
 
-    // Basic validation
-    if (!bookId) {
-      await session.abortTransaction();
-      return res.status(400).json({
-        error: 'Book ID is required',
-        details: 'bookId field is missing'
-      });
-    }
-
-    if (!pickupDate) {
-      await session.abortTransaction();
-      return res.status(400).json({
-        error: 'Pickup date is required',
-        details: 'pickupDate field is missing'
-      });
-    }
-
-    if (!bookTitle) {
-      await session.abortTransaction();
-      return res.status(400).json({
-        error: 'Book title is required',
-        details: 'bookTitle field is missing'
-      });
-    }
-
-    // Date parsing and validation
+    // ✅ FIXED: Better date parsing with timezone handling
     const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Today without time
+
     let pickup;
+    let reservation;
+
     try {
+      // Handle pickup date - force to local timezone
       pickup = new Date(pickupDate);
+      // Normalize to start of day in local timezone
+      pickup = new Date(pickup.getFullYear(), pickup.getMonth(), pickup.getDate());
+
       if (isNaN(pickup.getTime())) {
         throw new Error('Invalid pickup date');
       }
-      pickup.setHours(0, 0, 0, 0);
     } catch (error) {
       await session.abortTransaction();
       return res.status(400).json({
@@ -85,13 +65,15 @@ router.post('/', async (req, res) => {
       });
     }
 
-    let reservation;
     try {
+      // Handle reservation date - force to local timezone
       reservation = reservationDate ? new Date(reservationDate) : new Date();
+      // Normalize to start of day in local timezone
+      reservation = new Date(reservation.getFullYear(), reservation.getMonth(), reservation.getDate());
+
       if (isNaN(reservation.getTime())) {
         throw new Error('Invalid reservation date');
       }
-      reservation.setHours(0, 0, 0, 0);
     } catch (error) {
       await session.abortTransaction();
       return res.status(400).json({
@@ -100,17 +82,20 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // ✅ FIXED: Reservation date validation (3 days total including today)
-    const maxReservationDate = new Date(now);
-    maxReservationDate.setDate(now.getDate() + 2); // Today + 2 days = 3 days total
-    maxReservationDate.setHours(23, 59, 59, 999);
-    
-    if (reservation < now) {
+    console.log('Parsed dates - Today:', today.toISOString());
+    console.log('Parsed dates - Reservation:', reservation.toISOString());
+    console.log('Parsed dates - Pickup:', pickup.toISOString());
+
+    // ✅ FIXED: Date comparisons using normalized dates
+    const maxReservationDate = new Date(today);
+    maxReservationDate.setDate(today.getDate() + 2);
+
+    if (reservation < today) {
       await session.abortTransaction();
       return res.status(400).json({
         error: 'Reservation date cannot be in the past.',
         receivedReservationDate: reservation.toISOString().split('T')[0],
-        todayDate: now.toISOString().split('T')[0]
+        todayDate: today.toISOString().split('T')[0]
       });
     }
 
@@ -177,7 +162,7 @@ router.post('/', async (req, res) => {
     const material = await LearningMaterial.findById(bookId).session(session);
     if (!material) {
       await session.abortTransaction();
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'Material not found',
         details: `No material found with ID: ${bookId}`
       });
@@ -275,14 +260,14 @@ router.post('/', async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     console.error('Reservation error:', error);
-    
+
     if (error.name === 'ValidationError') {
       return res.status(400).json({
         error: 'Validation failed',
         details: Object.values(error.errors).map(err => err.message)
       });
     }
-    
+
     if (error.name === 'CastError') {
       return res.status(400).json({
         error: 'Invalid ID format',
@@ -316,7 +301,7 @@ router.get('/admin/all-requests', async (req, res) => {
     res.status(200).json(requests);
   } catch (error) {
     console.error('Admin requests error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch requests',
       details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
@@ -438,7 +423,7 @@ router.patch('/:id/status', async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     console.error('Status update error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to update status',
       details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
@@ -457,7 +442,7 @@ router.get('/my-requests', async (req, res) => {
     res.status(200).json(requests);
   } catch (error) {
     console.error('Get my requests error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch your reservation requests',
       details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
@@ -485,7 +470,7 @@ router.patch('/:id/cancel', async (req, res) => {
 
     if (!['pending', 'approved'].includes(reservation.status)) {
       await session.abortTransaction();
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Cannot cancel this reservation',
         currentStatus: reservation.status
       });
@@ -530,7 +515,7 @@ router.patch('/:id/cancel', async (req, res) => {
       userAgent: req.headers['user-agent'] || 'Unknown'
     }).save();
 
-    res.json({ 
+    res.json({
       message: 'Reservation cancelled successfully',
       reservation: {
         id: reservation._id,
@@ -541,7 +526,7 @@ router.patch('/:id/cancel', async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     console.error('Cancel reservation error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to cancel reservation',
       details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
