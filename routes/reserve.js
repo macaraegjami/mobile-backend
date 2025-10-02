@@ -39,7 +39,7 @@ router.post('/', async (req, res) => {
   try {
     const { bookId, pickupDate, bookTitle, author, reservationDate, userId, userName } = req.body;
 
-    // Add better validation with detailed error messages
+    // Validate required fields
     const missingFields = [];
     if (!bookId) missingFields.push('bookId');
     if (!pickupDate) missingFields.push('pickupDate');
@@ -49,36 +49,75 @@ router.post('/', async (req, res) => {
       await session.abortTransaction();
       return res.status(400).json({
         error: `Missing required fields: ${missingFields.join(', ')}`,
-        details: req.body // Include received data for debugging
+        details: req.body
       });
     }
 
-    // ✅ Convert dates
+    // ✅ Convert dates to start of day for accurate comparison
     const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    
     const pickup = new Date(pickupDate);
+    pickup.setHours(0, 0, 0, 0);
+    
     const reservation = reservationDate ? new Date(reservationDate) : new Date();
+    reservation.setHours(0, 0, 0, 0);
 
-    // ✅ CORRECTED VALIDATION: Only pickup date must be weekday
-    // Reservation date can be any day (including weekends)
-    // Pickup date must be weekday only
-    if ([0, 6].includes(pickup.getDay())) { // 0 = Sunday, 6 = Saturday
+    // ✅ CORRECTED VALIDATION 1: Reservation date validation
+    // Can be today or up to 3 days from today
+    const maxReservationDate = new Date(now);
+    maxReservationDate.setDate(now.getDate() + 3);
+    
+    if (reservation < now) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        error: 'Reservation date cannot be in the past.',
+        receivedReservationDate: reservationDate,
+        todayDate: now.toISOString().split('T')[0]
+      });
+    }
+
+    if (reservation > maxReservationDate) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        error: 'Reservation date must be within 3 days from today.',
+        receivedReservationDate: reservationDate,
+        maxAllowedDate: maxReservationDate.toISOString().split('T')[0]
+      });
+    }
+
+    // ✅ CORRECTED VALIDATION 2: Pickup date must be weekday only
+    if ([0, 6].includes(pickup.getDay())) {
       await session.abortTransaction();
       return res.status(400).json({
         error: 'Pickup date must be on a weekday (Monday-Friday).',
         receivedPickupDate: pickupDate,
-        pickupDayOfWeek: pickup.getDay() // 0-6 where 0 is Sunday
+        pickupDayOfWeek: pickup.getDay()
       });
     }
 
-    // ✅ Reservation date validation (can be any day, but must be valid)
-    if (reservation > pickup) {
+    // ✅ CORRECTED VALIDATION 3: Pickup can be same day or after reservation (not before)
+    if (pickup < reservation) {
       await session.abortTransaction();
       return res.status(400).json({
-        error: 'Reservation date cannot be after pickup date.'
+        error: 'Pickup date cannot be before reservation date.',
+        reservationDate: reservation.toISOString().split('T')[0],
+        pickupDate: pickup.toISOString().split('T')[0]
       });
     }
 
-    // 8. Better Data Population - Get user info if not provided
+    // ✅ CORRECTED VALIDATION 4: Pickup must be within 3 days of reservation
+    const daysDiff = Math.floor((pickup - reservation) / (1000 * 60 * 60 * 24));
+    if (daysDiff > 3) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        error: 'Pickup date must be within 3 days of reservation date.',
+        daysDifference: daysDiff,
+        maxAllowedDays: 3
+      });
+    }
+
+    // Get user info if not provided
     let userInfo = {};
     if (!userName || !userId) {
       const user = await User.findById(req.user._id).session(session);
@@ -88,6 +127,7 @@ router.post('/', async (req, res) => {
       };
     }
 
+    // Check material availability
     const material = await LearningMaterial.findById(bookId).session(session);
     if (!material) {
       await session.abortTransaction();
@@ -102,7 +142,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // ✅ Create reservation (status: pending)
+    // ✅ Create reservation with validated dates
     const newReservation = new ReserveRequest({
       bookTitle,
       author: author || material.author || 'Unknown Author',
@@ -116,7 +156,7 @@ router.post('/', async (req, res) => {
 
     await newReservation.save({ session });
 
-    // 10. Enhanced Material Handling
+    // Update material availability
     material.availableCopies -= 1;
     material.status = material.availableCopies <= 0 ? 'unavailable' : 'available';
     await material.save({ session });
@@ -124,7 +164,7 @@ router.post('/', async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    // 6. Activity Logging
+    // Activity Logging
     const user = await User.findById(newReservation.userId);
     await new Activity({
       userId: user._id,
@@ -154,7 +194,6 @@ router.post('/', async (req, res) => {
     });
   }
 });
-
 
 // 9. Add Admin Endpoints (with proper authorization check)
 router.get('/admin/all-requests', async (req, res) => {
