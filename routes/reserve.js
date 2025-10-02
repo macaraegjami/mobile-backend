@@ -31,7 +31,7 @@ const NotificationService = {
   }
 };
 
-// ✅ FIXED: Create reservation endpoint
+// ✅ FIXED: Create reservation endpoint with proper 3-day logic
 router.post('/', async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -41,7 +41,7 @@ router.post('/', async (req, res) => {
 
     console.log('Received reservation data:', req.body);
 
-    // ✅ FIXED: Better validation with proper field checking
+    // Basic validation
     if (!bookId) {
       await session.abortTransaction();
       return res.status(400).json({
@@ -66,7 +66,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // ✅ FIXED: Proper date parsing with validation
+    // Date parsing and validation
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     
@@ -100,7 +100,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // ✅ FIXED: Reservation date validation (today to today + 2 days = 3 days total)
+    // ✅ FIXED: Reservation date validation (3 days total including today)
     const maxReservationDate = new Date(now);
     maxReservationDate.setDate(now.getDate() + 2); // Today + 2 days = 3 days total
     maxReservationDate.setHours(23, 59, 59, 999);
@@ -119,12 +119,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({
         error: 'Reservation date must be within 3 days from today.',
         receivedReservationDate: reservation.toISOString().split('T')[0],
-        maxAllowedDate: maxReservationDate.toISOString().split('T')[0],
-        availableDates: [
-          now.toISOString().split('T')[0],
-          new Date(now.setDate(now.getDate() + 1)).toISOString().split('T')[0],
-          new Date(now.setDate(now.getDate() + 1)).toISOString().split('T')[0]
-        ]
+        maxAllowedDate: maxReservationDate.toISOString().split('T')[0]
       });
     }
 
@@ -151,7 +146,7 @@ router.post('/', async (req, res) => {
 
     // ✅ FIXED: Pickup must be within 3 days of reservation (inclusive)
     const maxPickupDate = new Date(reservation);
-    maxPickupDate.setDate(reservation.getDate() + 3); // Reservation date + 3 days
+    maxPickupDate.setDate(reservation.getDate() + 2); // Reservation date + 2 days = 3 days total
     maxPickupDate.setHours(23, 59, 59, 999);
 
     if (pickup > maxPickupDate) {
@@ -160,12 +155,11 @@ router.post('/', async (req, res) => {
         error: 'Pickup date must be within 3 days of reservation date.',
         reservationDate: reservation.toISOString().split('T')[0],
         pickupDate: pickup.toISOString().split('T')[0],
-        maxPickupDate: maxPickupDate.toISOString().split('T')[0],
-        daysDifference: Math.floor((pickup - reservation) / (1000 * 60 * 60 * 24))
+        maxPickupDate: maxPickupDate.toISOString().split('T')[0]
       });
     }
 
-    // ✅ FIXED: Get user info properly
+    // Get user info
     let finalUserId = userId;
     let finalUserName = userName;
 
@@ -179,7 +173,7 @@ router.post('/', async (req, res) => {
       finalUserName = `${user.firstName} ${user.lastName}`;
     }
 
-    // ✅ FIXED: Check material availability with better error handling
+    // Check material availability
     const material = await LearningMaterial.findById(bookId).session(session);
     if (!material) {
       await session.abortTransaction();
@@ -198,7 +192,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // ✅ FIXED: Check for existing active reservations for this user and book
+    // Check for existing active reservations
     const existingReservation = await ReserveRequest.findOne({
       userId: finalUserId,
       bookId: bookId,
@@ -214,7 +208,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // ✅ FIXED: Create reservation with proper data
+    // Create reservation
     const newReservation = new ReserveRequest({
       bookTitle: bookTitle,
       author: author || material.author || 'Unknown Author',
@@ -230,7 +224,7 @@ router.post('/', async (req, res) => {
 
     await newReservation.save({ session });
 
-    // ✅ FIXED: Update material availability
+    // Update material availability
     material.availableCopies -= 1;
     if (material.availableCopies <= 0) {
       material.status = 'unavailable';
@@ -239,7 +233,7 @@ router.post('/', async (req, res) => {
 
     await session.commitTransaction();
 
-    // ✅ FIXED: Activity Logging (outside transaction)
+    // Activity Logging
     const user = await User.findById(finalUserId);
     if (user) {
       await new Activity({
@@ -255,7 +249,7 @@ router.post('/', async (req, res) => {
       }).save();
     }
 
-    // ✅ FIXED: Send notification
+    // Send notification
     await NotificationService.createNotification(
       finalUserId,
       'reservation_created',
@@ -282,7 +276,6 @@ router.post('/', async (req, res) => {
     await session.abortTransaction();
     console.error('Reservation error:', error);
     
-    // ✅ FIXED: Better error response
     if (error.name === 'ValidationError') {
       return res.status(400).json({
         error: 'Validation failed',
