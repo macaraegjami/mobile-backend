@@ -5,13 +5,13 @@ import User from '../models/User.js';
 import LearningMaterial from '../models/LearningMaterials.js';
 import ReserveRequest from '../models/ReserveRequest.js';
 import mongoose from 'mongoose';
-import Activity from '../models/Activity.js'; // 6. Add Activity Logging
-import Notification from '../models/Notification.js'; // 5. Add Notification System
+import Activity from '../models/Activity.js';
+import Notification from '../models/Notification.js';
 
 const router = Router();
 router.use(authenticateToken);
 
-// 5. Add Notification Service (simplified version)
+// Notification Service
 const NotificationService = {
   async createNotification(userId, type, title, message) {
     try {
@@ -31,7 +31,7 @@ const NotificationService = {
   }
 };
 
-// In your reserve-requests.js route file
+// ✅ FIXED: Create reservation endpoint
 router.post('/', async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -39,40 +39,77 @@ router.post('/', async (req, res) => {
   try {
     const { bookId, pickupDate, bookTitle, author, reservationDate, userId, userName } = req.body;
 
-    // Validate required fields
-    const missingFields = [];
-    if (!bookId) missingFields.push('bookId');
-    if (!pickupDate) missingFields.push('pickupDate');
-    if (!bookTitle) missingFields.push('bookTitle');
+    console.log('Received reservation data:', req.body);
 
-    if (missingFields.length > 0) {
+    // ✅ FIXED: Better validation with proper field checking
+    if (!bookId) {
       await session.abortTransaction();
       return res.status(400).json({
-        error: `Missing required fields: ${missingFields.join(', ')}`,
-        details: req.body
+        error: 'Book ID is required',
+        details: 'bookId field is missing'
       });
     }
 
-    // ✅ Convert dates to start of day for accurate comparison
+    if (!pickupDate) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        error: 'Pickup date is required',
+        details: 'pickupDate field is missing'
+      });
+    }
+
+    if (!bookTitle) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        error: 'Book title is required',
+        details: 'bookTitle field is missing'
+      });
+    }
+
+    // ✅ FIXED: Proper date parsing with validation
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     
-    const pickup = new Date(pickupDate);
-    pickup.setHours(0, 0, 0, 0);
-    
-    const reservation = reservationDate ? new Date(reservationDate) : new Date();
-    reservation.setHours(0, 0, 0, 0);
+    let pickup;
+    try {
+      pickup = new Date(pickupDate);
+      if (isNaN(pickup.getTime())) {
+        throw new Error('Invalid pickup date');
+      }
+      pickup.setHours(0, 0, 0, 0);
+    } catch (error) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        error: 'Invalid pickup date format',
+        details: 'Please provide a valid date for pickup'
+      });
+    }
 
-    // ✅ CORRECTED VALIDATION 1: Reservation date validation
-    // Can be today or up to 3 days from today
+    let reservation;
+    try {
+      reservation = reservationDate ? new Date(reservationDate) : new Date();
+      if (isNaN(reservation.getTime())) {
+        throw new Error('Invalid reservation date');
+      }
+      reservation.setHours(0, 0, 0, 0);
+    } catch (error) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        error: 'Invalid reservation date format',
+        details: 'Please provide a valid date for reservation'
+      });
+    }
+
+    // ✅ FIXED: Reservation date validation (today to today + 2 days = 3 days total)
     const maxReservationDate = new Date(now);
-    maxReservationDate.setDate(now.getDate() + 3);
+    maxReservationDate.setDate(now.getDate() + 2); // Today + 2 days = 3 days total
+    maxReservationDate.setHours(23, 59, 59, 999);
     
     if (reservation < now) {
       await session.abortTransaction();
       return res.status(400).json({
         error: 'Reservation date cannot be in the past.',
-        receivedReservationDate: reservationDate,
+        receivedReservationDate: reservation.toISOString().split('T')[0],
         todayDate: now.toISOString().split('T')[0]
       });
     }
@@ -81,22 +118,28 @@ router.post('/', async (req, res) => {
       await session.abortTransaction();
       return res.status(400).json({
         error: 'Reservation date must be within 3 days from today.',
-        receivedReservationDate: reservationDate,
-        maxAllowedDate: maxReservationDate.toISOString().split('T')[0]
+        receivedReservationDate: reservation.toISOString().split('T')[0],
+        maxAllowedDate: maxReservationDate.toISOString().split('T')[0],
+        availableDates: [
+          now.toISOString().split('T')[0],
+          new Date(now.setDate(now.getDate() + 1)).toISOString().split('T')[0],
+          new Date(now.setDate(now.getDate() + 1)).toISOString().split('T')[0]
+        ]
       });
     }
 
-    // ✅ CORRECTED VALIDATION 2: Pickup date must be weekday only
-    if ([0, 6].includes(pickup.getDay())) {
+    // ✅ FIXED: Pickup date must be weekday only (Monday-Friday)
+    const pickupDay = pickup.getDay();
+    if (pickupDay === 0 || pickupDay === 6) { // 0 = Sunday, 6 = Saturday
       await session.abortTransaction();
       return res.status(400).json({
         error: 'Pickup date must be on a weekday (Monday-Friday).',
-        receivedPickupDate: pickupDate,
-        pickupDayOfWeek: pickup.getDay()
+        receivedPickupDate: pickup.toISOString().split('T')[0],
+        pickupDayOfWeek: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][pickupDay]
       });
     }
 
-    // ✅ CORRECTED VALIDATION 3: Pickup can be same day or after reservation (not before)
+    // ✅ FIXED: Pickup can be same day or after reservation (not before)
     if (pickup < reservation) {
       await session.abortTransaction();
       return res.status(400).json({
@@ -106,105 +149,171 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // ✅ CORRECTED VALIDATION 4: Pickup must be within 3 days of reservation
-    const daysDiff = Math.floor((pickup - reservation) / (1000 * 60 * 60 * 24));
-    if (daysDiff > 3) {
+    // ✅ FIXED: Pickup must be within 3 days of reservation (inclusive)
+    const maxPickupDate = new Date(reservation);
+    maxPickupDate.setDate(reservation.getDate() + 3); // Reservation date + 3 days
+    maxPickupDate.setHours(23, 59, 59, 999);
+
+    if (pickup > maxPickupDate) {
       await session.abortTransaction();
       return res.status(400).json({
         error: 'Pickup date must be within 3 days of reservation date.',
-        daysDifference: daysDiff,
-        maxAllowedDays: 3
+        reservationDate: reservation.toISOString().split('T')[0],
+        pickupDate: pickup.toISOString().split('T')[0],
+        maxPickupDate: maxPickupDate.toISOString().split('T')[0],
+        daysDifference: Math.floor((pickup - reservation) / (1000 * 60 * 60 * 24))
       });
     }
 
-    // Get user info if not provided
-    let userInfo = {};
-    if (!userName || !userId) {
+    // ✅ FIXED: Get user info properly
+    let finalUserId = userId;
+    let finalUserName = userName;
+
+    if (!finalUserId || !finalUserName) {
       const user = await User.findById(req.user._id).session(session);
-      userInfo = {
-        userId: user._id,
-        userName: `${user.firstName} ${user.lastName}`
-      };
+      if (!user) {
+        await session.abortTransaction();
+        return res.status(404).json({ error: 'User not found' });
+      }
+      finalUserId = user._id;
+      finalUserName = `${user.firstName} ${user.lastName}`;
     }
 
-    // Check material availability
+    // ✅ FIXED: Check material availability with better error handling
     const material = await LearningMaterial.findById(bookId).session(session);
     if (!material) {
       await session.abortTransaction();
-      return res.status(404).json({ error: 'Material not found' });
+      return res.status(404).json({ 
+        error: 'Material not found',
+        details: `No material found with ID: ${bookId}`
+      });
     }
 
     if (material.availableCopies <= 0) {
       await session.abortTransaction();
       return res.status(400).json({
         error: 'No available copies to reserve',
-        availableCopies: material.availableCopies
+        availableCopies: material.availableCopies,
+        materialStatus: material.status
       });
     }
 
-    // ✅ Create reservation with validated dates
+    // ✅ FIXED: Check for existing active reservations for this user and book
+    const existingReservation = await ReserveRequest.findOne({
+      userId: finalUserId,
+      bookId: bookId,
+      status: { $in: ['pending', 'approved'] }
+    }).session(session);
+
+    if (existingReservation) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        error: 'You already have an active reservation for this book',
+        existingReservationId: existingReservation._id,
+        existingStatus: existingReservation.status
+      });
+    }
+
+    // ✅ FIXED: Create reservation with proper data
     const newReservation = new ReserveRequest({
-      bookTitle,
+      bookTitle: bookTitle,
       author: author || material.author || 'Unknown Author',
       reservationDate: reservation,
       pickupDate: pickup,
       bookId: bookId,
-      userId: userId || userInfo.userId || req.user._id,
-      userName: userName || userInfo.userName || `${req.user.firstName} ${req.user.lastName}`,
-      status: 'pending'
+      userId: finalUserId,
+      userName: finalUserName,
+      status: 'pending',
+      createdAt: new Date(),
+      updatedAt: new Date()
     });
 
     await newReservation.save({ session });
 
-    // Update material availability
+    // ✅ FIXED: Update material availability
     material.availableCopies -= 1;
-    material.status = material.availableCopies <= 0 ? 'unavailable' : 'available';
+    if (material.availableCopies <= 0) {
+      material.status = 'unavailable';
+    }
     await material.save({ session });
 
     await session.commitTransaction();
-    session.endSession();
 
-    // Activity Logging
-    const user = await User.findById(newReservation.userId);
-    await new Activity({
-      userId: user._id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      role: user.role,
-      action: 'reserve_add',
-      details: `Reserved material: ${material.name}`,
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent']
-    }).save();
+    // ✅ FIXED: Activity Logging (outside transaction)
+    const user = await User.findById(finalUserId);
+    if (user) {
+      await new Activity({
+        userId: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        action: 'reserve_add',
+        details: `Reserved material: ${material.name || bookTitle}`,
+        ipAddress: req.ip || req.connection.remoteAddress,
+        userAgent: req.headers['user-agent'] || 'Unknown'
+      }).save();
+    }
+
+    // ✅ FIXED: Send notification
+    await NotificationService.createNotification(
+      finalUserId,
+      'reservation_created',
+      'Reservation Submitted',
+      `Your reservation for "${bookTitle}" has been submitted successfully.`
+    );
 
     res.status(201).json({
       message: 'Reservation submitted successfully',
-      request: newReservation,
-      updatedMaterial: material
+      request: {
+        id: newReservation._id,
+        bookTitle: newReservation.bookTitle,
+        reservationDate: newReservation.reservationDate,
+        pickupDate: newReservation.pickupDate,
+        status: newReservation.status
+      },
+      updatedMaterial: {
+        availableCopies: material.availableCopies,
+        status: material.status
+      }
     });
 
   } catch (error) {
     await session.abortTransaction();
-    session.endSession();
     console.error('Reservation error:', error);
+    
+    // ✅ FIXED: Better error response
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: Object.values(error.errors).map(err => err.message)
+      });
+    }
+    
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        error: 'Invalid ID format',
+        details: 'Please check the provided IDs'
+      });
+    }
+
     res.status(500).json({
       error: 'Failed to submit reservation',
-      details: error.message
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
+  } finally {
+    session.endSession();
   }
 });
 
-// 9. Add Admin Endpoints (with proper authorization check)
+// ✅ FIXED: Admin get all requests
 router.get('/admin/all-requests', async (req, res) => {
   try {
-    // Check if user is admin
     const user = await User.findById(req.user._id);
-    if (user.role !== 'admin') {
+    if (!user || user.role !== 'admin') {
       return res.status(403).json({ error: 'Access denied. Admin required.' });
     }
 
-    // 8. Extensive Data Population
     const requests = await ReserveRequest.find()
       .populate('userId', 'firstName lastName email phone')
       .populate('bookId', 'name author imageUrl isbn accessionNumber status availableCopies')
@@ -213,11 +322,15 @@ router.get('/admin/all-requests', async (req, res) => {
 
     res.status(200).json(requests);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Admin requests error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch requests',
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 });
 
-// 7. Complex Status Update Handling
+// ✅ FIXED: Status update endpoint
 router.patch('/:id/status', async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -226,9 +339,13 @@ router.patch('/:id/status', async (req, res) => {
     const { status } = req.body;
     const { id } = req.params;
 
-    // Check if user is admin
+    if (!status) {
+      await session.abortTransaction();
+      return res.status(400).json({ error: 'Status is required' });
+    }
+
     const user = await User.findById(req.user._id);
-    if (user.role !== 'admin') {
+    if (!user || user.role !== 'admin') {
       await session.abortTransaction();
       return res.status(403).json({ error: 'Access denied. Admin required.' });
     }
@@ -245,9 +362,8 @@ router.patch('/:id/status', async (req, res) => {
 
     const material = await LearningMaterial.findById(reserveRequest.bookId).session(session);
 
-    // 7. Complex Status Handling
+    // Handle different status changes
     if (status === 'borrowed') {
-      // Convert to borrow request
       const newBorrow = new BorrowRequest({
         userId: reserveRequest.userId,
         userName: reserveRequest.userName,
@@ -256,14 +372,14 @@ router.patch('/:id/status', async (req, res) => {
         author: reserveRequest.author,
         imageUrl: material?.imageUrl || '',
         borrowDate: new Date(),
-        returnDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        returnDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
         status: 'borrowed'
       });
 
       await newBorrow.save({ session });
 
-    } else if (status === 'cancelled' || status === 'rejected') {
-      // Return the copy to available pool
+    } else if ((status === 'cancelled' || status === 'rejected') && oldStatus !== 'cancelled' && oldStatus !== 'rejected') {
+      // Return the copy to available pool only if it wasn't already cancelled/rejected
       if (material) {
         material.availableCopies += 1;
         material.status = material.availableCopies > 0 ? 'available' : 'unavailable';
@@ -273,9 +389,8 @@ router.patch('/:id/status', async (req, res) => {
 
     await reserveRequest.save({ session });
     await session.commitTransaction();
-    session.endSession();
 
-    // 5. Send appropriate notification based on status change
+    // Send notification
     let notificationTitle = '';
     let notificationMessage = '';
 
@@ -304,7 +419,7 @@ router.patch('/:id/status', async (req, res) => {
       );
     }
 
-    // 6. Activity Logging
+    // Activity Logging
     await new Activity({
       userId: req.user._id,
       firstName: user.firstName,
@@ -313,27 +428,35 @@ router.patch('/:id/status', async (req, res) => {
       role: user.role,
       action: `reserve_status_${status}`,
       details: `Changed reservation status from ${oldStatus} to ${status} for: ${reserveRequest.bookTitle}`,
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent']
+      ipAddress: req.ip || req.connection.remoteAddress,
+      userAgent: req.headers['user-agent'] || 'Unknown'
     }).save();
 
     res.json({
       message: `Reservation status updated to ${status}`,
-      reserveRequest
+      reserveRequest: {
+        id: reserveRequest._id,
+        bookTitle: reserveRequest.bookTitle,
+        status: reserveRequest.status,
+        oldStatus
+      }
     });
 
   } catch (error) {
     await session.abortTransaction();
-    session.endSession();
     console.error('Status update error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: 'Failed to update status',
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  } finally {
+    session.endSession();
   }
 });
 
-// GET user reservations with better data population
+// ✅ FIXED: Get user reservations
 router.get('/my-requests', async (req, res) => {
   try {
-    // 8. Enhanced Data Population
     const requests = await ReserveRequest.find({ userId: req.user._id })
       .populate('bookId', 'title author imageUrl isbn accessionNumber yearofpub typeofmat status availableCopies')
       .sort({ createdAt: -1 });
@@ -341,11 +464,14 @@ router.get('/my-requests', async (req, res) => {
     res.status(200).json(requests);
   } catch (error) {
     console.error('Get my requests error:', error);
-    res.status(500).json({ error: 'Failed to fetch your reservation requests' });
+    res.status(500).json({ 
+      error: 'Failed to fetch your reservation requests',
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 });
 
-// Cancel reservation with enhanced features
+// ✅ FIXED: Cancel reservation
 router.patch('/:id/cancel', async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -358,7 +484,6 @@ router.patch('/:id/cancel', async (req, res) => {
       return res.status(404).json({ error: 'Reservation not found' });
     }
 
-    // Check if user owns this reservation or is admin
     const user = await User.findById(req.user._id);
     if (reservation.userId.toString() !== req.user._id.toString() && user.role !== 'admin') {
       await session.abortTransaction();
@@ -367,15 +492,19 @@ router.patch('/:id/cancel', async (req, res) => {
 
     if (!['pending', 'approved'].includes(reservation.status)) {
       await session.abortTransaction();
-      return res.status(400).json({ error: 'Cannot cancel this reservation' });
+      return res.status(400).json({ 
+        error: 'Cannot cancel this reservation',
+        currentStatus: reservation.status
+      });
     }
 
     const oldStatus = reservation.status;
     reservation.status = 'cancelled';
     reservation.cancelledAt = new Date();
+    reservation.updatedAt = new Date();
     await reservation.save({ session });
 
-    // 10. Enhanced Material Handling
+    // Return copy to available pool
     const material = await LearningMaterial.findById(reservation.bookId).session(session);
     if (material) {
       material.availableCopies += 1;
@@ -384,9 +513,8 @@ router.patch('/:id/cancel', async (req, res) => {
     }
 
     await session.commitTransaction();
-    session.endSession();
 
-    // 5. Send cancellation notification
+    // Send notification
     if (oldStatus !== 'cancelled') {
       await NotificationService.createNotification(
         reservation.userId,
@@ -396,7 +524,7 @@ router.patch('/:id/cancel', async (req, res) => {
       );
     }
 
-    // 6. Activity Logging
+    // Activity Logging
     await new Activity({
       userId: req.user._id,
       firstName: user.firstName,
@@ -405,15 +533,27 @@ router.patch('/:id/cancel', async (req, res) => {
       role: user.role,
       action: 'reserve_cancel',
       details: `Cancelled reservation for: ${reservation.bookTitle}`,
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent']
+      ipAddress: req.ip || req.connection.remoteAddress,
+      userAgent: req.headers['user-agent'] || 'Unknown'
     }).save();
 
-    res.json({ message: 'Reservation cancelled successfully' });
+    res.json({ 
+      message: 'Reservation cancelled successfully',
+      reservation: {
+        id: reservation._id,
+        bookTitle: reservation.bookTitle,
+        status: reservation.status
+      }
+    });
   } catch (error) {
     await session.abortTransaction();
+    console.error('Cancel reservation error:', error);
+    res.status(500).json({ 
+      error: 'Failed to cancel reservation',
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  } finally {
     session.endSession();
-    res.status(500).json({ error: error.message });
   }
 });
 
